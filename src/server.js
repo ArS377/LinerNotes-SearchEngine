@@ -31,6 +31,10 @@ import {
   audioIdentificationConfigured,
   identifyAudio
 } from "./providers/acrcloud.js";
+import {
+  askOpenClaw,
+  openClawConfigured
+} from "./providers/openclaw.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -241,8 +245,46 @@ async function handleRequest(request, response) {
       exactSpotifyLinks: Boolean(
         process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET
       ),
-      audioIdentification: audioIdentificationConfigured()
+      audioIdentification: audioIdentificationConfigured(),
+      openClawAssistant: openClawConfigured()
     });
+    return;
+  }
+
+  if (url.pathname === "/api/assistant" && request.method === "POST") {
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of request) {
+      total += chunk.length;
+      if (total > 64 * 1024) {
+        sendJson(response, 413, { error: "Assistant request is too large" });
+        return;
+      }
+      chunks.push(chunk);
+    }
+
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+      const answer = await askOpenClaw(body.prompt, body.context);
+      sendJson(response, 200, answer);
+    } catch (error) {
+      if (error.code === "NOT_CONFIGURED") {
+        sendJson(response, 503, {
+          error: "OpenClaw assistant is not configured",
+          required: ["OPENCLAW_BASE_URL", "OPENCLAW_API_KEY"]
+        });
+        return;
+      }
+      if (error.code === "EMPTY_PROMPT" || error instanceof SyntaxError) {
+        sendJson(response, 400, {
+          error: error instanceof SyntaxError
+            ? "Assistant request must be valid JSON"
+            : error.message
+        });
+        return;
+      }
+      sendJson(response, 502, { error: "OpenClaw assistant unavailable" });
+    }
     return;
   }
 
@@ -316,7 +358,8 @@ async function handleRequest(request, response) {
           : "search-fallback",
         audioIdentification: audioIdentificationConfigured()
           ? "configured"
-          : "not-configured"
+          : "not-configured",
+        openClaw: openClawConfigured() ? "configured" : "not-configured"
       }
     });
     return;

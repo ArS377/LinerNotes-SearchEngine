@@ -147,10 +147,86 @@ async function loadCapabilities() {
         </p>
       `;
     }
+    syncAssistantVisibility();
   } catch {
     capabilities = null;
     audioCapability.textContent = "Offline";
+    syncAssistantVisibility();
   }
+}
+
+function syncAssistantVisibility() {
+  for (const panel of document.querySelectorAll("[data-assistant-panel]")) {
+    panel.hidden = !capabilities?.openClawAssistant;
+  }
+}
+
+function renderAssistantPanel(kind) {
+  const heading = kind === "song" ? "Ask about this recording" : "Ask about these results";
+  const placeholder = kind === "song"
+    ? "Ask about influences, versions, credits, or where to listen next"
+    : "Ask for listening paths, likely matches, or context around this search";
+  return `
+    <section class="assistant-panel" data-assistant-panel data-assistant-kind="${kind}" hidden>
+      <div>
+        <p class="eyebrow">OpenClaw assistant</p>
+        <h2>${heading}</h2>
+      </div>
+      <form class="assistant-form" data-assistant-form>
+        <label class="sr-only">Ask OpenClaw</label>
+        <textarea name="prompt" rows="3" placeholder="${placeholder}" required></textarea>
+        <button type="submit">Ask OpenClaw</button>
+      </form>
+      <div class="assistant-response" data-assistant-response aria-live="polite"></div>
+    </section>
+  `;
+}
+
+function assistantContext(panel) {
+  if (panel.dataset.assistantKind === "song" && currentSong) {
+    return {
+      type: "song",
+      song: {
+        title: currentSong.title,
+        artist: currentSong.artist?.name,
+        album: currentSong.album,
+        releaseDate: currentSong.releaseDate,
+        version: currentSong.version,
+        genres: currentSong.genres,
+        story: currentSong.story,
+        sources: currentSong.sources,
+        links: {
+          appleMusicUrl: currentSong.appleMusicUrl,
+          spotifyUrl: currentSong.spotifyUrl || currentSong.spotifySearchUrl,
+          musicBrainzUrl: currentSong.musicBrainzUrl
+        }
+      }
+    };
+  }
+
+  const url = new URL(window.location.href);
+  return {
+    type: "search",
+    query: url.searchParams.get("q") || "",
+    visibleResults: [...resultsList.querySelectorAll(".result-card")]
+      .slice(0, 8)
+      .map((card) => ({
+        title: card.querySelector(".result-title")?.textContent || "",
+        meta: card.querySelector(".result-meta")?.textContent || ""
+      }))
+  };
+}
+
+function renderAssistantAnswer(body) {
+  const answer = escapeHtml(body.answer || "OpenClaw did not return an answer.");
+  const citations = Array.isArray(body.citations) && body.citations.length
+    ? `<ul>${body.citations
+        .slice(0, 5)
+        .map((citation) => `<li>${escapeHtml(citation.title || citation.url || citation)}</li>`)
+        .join("")}</ul>`
+    : "";
+  const model = body.model ? `<small>Model: ${escapeHtml(body.model)}</small>` : "";
+  return `<p>${answer}</p>${citations}${model}`;
 }
 
 function renderResult(result, { showMatch = true } = {}) {
@@ -676,6 +752,8 @@ function renderSongMarkup(song) {
         : ""
     }
 
+    ${renderAssistantPanel("song")}
+
     <div class="song-body">
       <div>
         <section class="song-section">
@@ -776,6 +854,7 @@ async function renderSong(slug) {
     currentSong = song;
     document.title = `${song.title} by ${song.artist.name} - Liner Notes`;
     songContent.innerHTML = renderSongMarkup(song);
+    syncAssistantVisibility();
     const previewPlayer = songContent.querySelector("[data-preview-player]");
     previewPlayer?.addEventListener("error", () => {
       previewPlayer.hidden = true;
@@ -1018,6 +1097,44 @@ for (const [formIndex, form] of searchForms.entries()) {
     route(`/search?q=${encodeURIComponent(query)}`);
   });
 }
+
+document.addEventListener("submit", async (event) => {
+  if (!event.target.matches("[data-assistant-form]")) return;
+  event.preventDefault();
+  const form = event.target;
+  const panel = form.closest("[data-assistant-panel]");
+  const responseNode = panel.querySelector("[data-assistant-response]");
+  const submit = form.querySelector("button[type='submit']");
+  const prompt = new FormData(form).get("prompt").trim();
+  if (!prompt) return;
+
+  responseNode.textContent = "Asking OpenClaw...";
+  submit.disabled = true;
+  try {
+    const response = await fetch("/api/assistant", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        context: assistantContext(panel)
+      })
+    });
+    const body = await response.json();
+    if (response.status === 503) {
+      responseNode.innerHTML = `
+        <p>OpenClaw is not configured on this server.</p>
+        <small>Required: ${body.required.map(escapeHtml).join(", ")}</small>
+      `;
+      return;
+    }
+    if (!response.ok) throw new Error(body.error || "OpenClaw request failed");
+    responseNode.innerHTML = renderAssistantAnswer(body);
+  } catch (error) {
+    responseNode.textContent = error.message || "OpenClaw request failed.";
+  } finally {
+    submit.disabled = false;
+  }
+});
 
 audioInput.addEventListener("change", () => {
   const file = audioInput.files?.[0];

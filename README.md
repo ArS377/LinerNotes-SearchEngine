@@ -47,6 +47,8 @@ Copy `.env.example` to `.env` and add credentials as needed.
   score as a stream count. Without credentials, the interface provides a correctly
   encoded Spotify search link.
 - ACRCloud credentials enable audio-file and humming identification.
+- OpenClaw credentials enable a read-only assistant panel that can answer
+  questions using the current search or song context.
 - `MUSICBRAINZ_CONTACT` identifies this application in MusicBrainz API requests.
 
 Credentials are used only on the server and are never exposed to browser code.

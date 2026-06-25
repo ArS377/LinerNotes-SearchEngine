@@ -91,6 +91,24 @@
           <h1 data-results-title></h1>
           <p data-results-summary aria-live="polite"></p>
         </div>
+        <section class="assistant-panel" data-assistant-panel data-assistant-kind="search" hidden>
+          <div>
+            <p class="eyebrow">OpenClaw assistant</p>
+            <h2>Ask about these results</h2>
+          </div>
+          <form class="assistant-form" data-assistant-form>
+            <label class="sr-only" for="search-assistant-prompt">Ask OpenClaw</label>
+            <textarea
+              id="search-assistant-prompt"
+              name="prompt"
+              rows="3"
+              placeholder="Ask for listening paths, likely matches, or context around this search"
+              required
+            ></textarea>
+            <button type="submit">Ask OpenClaw</button>
+          </form>
+          <div class="assistant-response" data-assistant-response aria-live="polite"></div>
+        </section>
         <div class="results-list" data-results-list aria-live="polite"></div>
       </section>
 
