@@ -35,6 +35,7 @@ import {
   askOpenClaw,
   openClawConfigured
 } from "./providers/openclaw.js";
+import { cached, cacheStatus, rateLimit } from "./services/cache.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -252,6 +253,17 @@ async function handleRequest(request, response) {
   }
 
   if (url.pathname === "/api/assistant" && request.method === "POST") {
+    const clientKey = request.headers.authorization
+      || request.socket.remoteAddress
+      || "anonymous";
+    const allowance = await rateLimit(`assistant:${clientKey}`, {
+      limit: 12,
+      windowSeconds: 60
+    });
+    if (!allowance.allowed) {
+      sendJson(response, 429, { error: "Assistant rate limit exceeded" });
+      return;
+    }
     const chunks = [];
     let total = 0;
     for await (const chunk of request) {
@@ -360,7 +372,8 @@ async function handleRequest(request, response) {
           ? "configured"
           : "not-configured",
         openClaw: openClawConfigured() ? "configured" : "not-configured"
-      }
+      },
+      cache: cacheStatus()
     });
     return;
   }
@@ -411,7 +424,11 @@ async function handleRequest(request, response) {
     const query = url.searchParams.get("q") || "";
     const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
     const search = query
-      ? await federatedSearch(query, { offset })
+      ? await cached(
+          `search:v1:${query.toLowerCase()}:${offset}`,
+          () => federatedSearch(query, { offset }),
+          { ttlSeconds: 300, staleSeconds: 900 }
+        )
       : {
           results: [],
           localCount: 0,
