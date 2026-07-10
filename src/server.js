@@ -36,6 +36,18 @@ import {
   openClawConfigured
 } from "./providers/openclaw.js";
 import { cached, cacheStatus, rateLimit } from "./services/cache.js";
+import {
+  addHistory,
+  authenticate,
+  clearHistory,
+  deleteAccount,
+  exportAccount,
+  libraryConfigured,
+  listHistory,
+  listSaved,
+  removeSaved,
+  saveRecording
+} from "./services/library.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -198,6 +210,25 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
+async function readJson(request, maximumBytes = 64 * 1024) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of request) {
+    total += chunk.length;
+    if (total > maximumBytes) {
+      const error = new Error("Request is too large");
+      error.code = "TOO_LARGE";
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+async function authenticatedUser(request) {
+  return authenticate(request.headers.authorization);
+}
+
 async function sendStatic(response, pathname) {
   const requested = pathname === "/" ? "/index.html" : pathname;
   const safePath = normalizePath(requested).replace(/^(\.\.[/\\])+/, "");
@@ -247,7 +278,8 @@ async function handleRequest(request, response) {
         process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET
       ),
       audioIdentification: audioIdentificationConfigured(),
-      openClawAssistant: openClawConfigured()
+      openClawAssistant: openClawConfigured(),
+      authenticatedLibrary: libraryConfigured()
     });
     return;
   }
@@ -341,6 +373,79 @@ async function handleRequest(request, response) {
         return;
       }
       sendJson(response, 502, { error: "Audio identification provider unavailable" });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/v1/library" || url.pathname.startsWith("/api/v1/library/")) {
+    try {
+      const user = await authenticatedUser(request);
+      if (request.method === "GET") {
+        sendJson(response, 200, { saved: await listSaved(user.id) });
+      } else if (request.method === "POST" && url.pathname === "/api/v1/library") {
+        const body = await readJson(request);
+        if (!body.slug || !body.title || !body.artist) {
+          sendJson(response, 400, { error: "slug, title, and artist are required" });
+          return;
+        }
+        sendJson(response, 201, await saveRecording(user.id, body));
+      } else if (request.method === "DELETE") {
+        const slug = decodeURIComponent(url.pathname.slice("/api/v1/library/".length));
+        if (!slug) {
+          sendJson(response, 400, { error: "Recording slug is required" });
+          return;
+        }
+        await removeSaved(user.id, slug);
+        response.writeHead(204).end();
+      } else {
+        sendJson(response, 405, { error: "Method not allowed" });
+      }
+    } catch (error) {
+      sendJson(response, error.code === "UNAUTHORIZED" ? 401 : error.code === "NOT_CONFIGURED" ? 503 : 502, {
+        error: error.message
+      });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/v1/history") {
+    try {
+      const user = await authenticatedUser(request);
+      if (request.method === "GET") {
+        sendJson(response, 200, { history: await listHistory(user.id) });
+      } else if (request.method === "POST") {
+        const body = await readJson(request);
+        if (!String(body.query || "").trim()) {
+          sendJson(response, 400, { error: "Search query is required" });
+          return;
+        }
+        await addHistory(user.id, body.query);
+        response.writeHead(204).end();
+      } else if (request.method === "DELETE") {
+        await clearHistory(user.id);
+        response.writeHead(204).end();
+      } else {
+        sendJson(response, 405, { error: "Method not allowed" });
+      }
+    } catch (error) {
+      sendJson(response, error.code === "UNAUTHORIZED" ? 401 : error.code === "NOT_CONFIGURED" ? 503 : 502, { error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/v1/account/export" || url.pathname === "/api/v1/account") {
+    try {
+      const user = await authenticatedUser(request);
+      if (url.pathname.endsWith("/export") && request.method === "GET") {
+        sendJson(response, 200, await exportAccount(user.id));
+      } else if (url.pathname === "/api/v1/account" && request.method === "DELETE") {
+        await deleteAccount(user.id);
+        response.writeHead(204).end();
+      } else {
+        sendJson(response, 405, { error: "Method not allowed" });
+      }
+    } catch (error) {
+      sendJson(response, error.code === "UNAUTHORIZED" ? 401 : error.code === "NOT_CONFIGURED" ? 503 : 502, { error: error.message });
     }
     return;
   }
