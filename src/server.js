@@ -48,6 +48,7 @@ import {
   removeSaved,
   saveRecording
 } from "./services/library.js";
+import { createConversation, sendAgentMessage } from "./services/music-agent.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -373,6 +374,34 @@ async function handleRequest(request, response) {
         return;
       }
       sendJson(response, 502, { error: "Audio identification provider unavailable" });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/v1/agent/conversations" && request.method === "POST") {
+    sendJson(response, 201, createConversation());
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/v1/agent/conversations/") && url.pathname.endsWith("/messages") && request.method === "POST") {
+    const conversationId = decodeURIComponent(
+      url.pathname
+        .slice("/api/v1/agent/conversations/".length)
+        .replace(/\/messages$/, "")
+    );
+    try {
+      const body = await readJson(request);
+      if (!String(body.prompt || "").trim()) {
+        sendJson(response, 400, { error: "Agent prompt is required" });
+        return;
+      }
+      sendJson(
+        response,
+        200,
+        await sendAgentMessage(conversationId, body.prompt, body.context)
+      );
+    } catch (error) {
+      sendJson(response, error.code === "NOT_FOUND" ? 404 : 502, { error: error.message });
     }
     return;
   }
