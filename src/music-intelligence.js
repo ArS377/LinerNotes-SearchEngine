@@ -20,9 +20,33 @@ function rankedEntries(map, limit = 5) {
     .map(([name, count]) => ({ name, count }));
 }
 
+function editDistance(left, right) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1)
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length];
+}
+
 export function classifySearchIntent(rawQuery) {
   const query = normalize(rawQuery || "");
   const exactArtist = artists.find((artist) => normalize(artist.name) === query);
+  const approximateArtist = query.split(" ").length >= 2
+    ? artists.find((artist) => {
+        const candidate = normalize(artist.name);
+        return candidate.split(" ").length === query.split(" ").length
+          && Math.abs(candidate.length - query.length) <= 2
+          && editDistance(candidate, query) <= 2;
+      })
+    : null;
   const namedArtist = artists.find((artist) => query.includes(normalize(artist.name)));
   const indexedLyricMatch = query.length >= 12 && recordings.some((recording) =>
     (recording.lyricSearchFragments || []).some((fragment) => normalize(fragment).includes(query))
@@ -31,6 +55,9 @@ export function classifySearchIntent(rawQuery) {
 
   if (exactArtist) {
     return { type: "artist", confidence: 0.99, entities: { artist: exactArtist.name } };
+  }
+  if (approximateArtist) {
+    return { type: "artist", confidence: 0.9, entities: { artist: approximateArtist.name } };
   }
   if (namedArtist && query !== normalize(namedArtist.name)) {
     return { type: "mixed", confidence: 0.92, entities: { artist: namedArtist.name } };

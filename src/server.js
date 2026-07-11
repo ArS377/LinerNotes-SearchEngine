@@ -571,10 +571,14 @@ async function handleRequest(request, response) {
   if (url.pathname === "/api/search") {
     const query = url.searchParams.get("q") || "";
     const mode = url.searchParams.get("mode") === "local" ? "local" : "federated";
+    const intent = classifySearchIntent(query);
+    const searchQuery = intent.type === "artist" && intent.entities.artist
+      ? intent.entities.artist
+      : query;
     const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
     const startedAt = performance.now();
     const localStartedAt = performance.now();
-    const localResults = query ? searchRecordings(query, 20).map((result) => ({
+    const localResults = query ? searchRecordings(searchQuery, 20).map((result) => ({
       ...result,
       source: "Liner Notes",
       external: false
@@ -594,8 +598,8 @@ async function handleRequest(request, response) {
             hasMore: false
           }
         : await cached(
-          `search:v2:${query.toLowerCase()}:${offset}`,
-          () => federatedSearch(query, { offset }),
+          `search:v3:${searchQuery.toLowerCase()}:${offset}`,
+          () => federatedSearch(searchQuery, { offset }),
           { ttlSeconds: 300, staleSeconds: 900 }
         )
       : {
@@ -613,7 +617,7 @@ async function handleRequest(request, response) {
       query,
       mode,
       ...search,
-      intent: classifySearchIntent(query),
+      intent,
       timings: {
         localMs: Math.round(localMs * 100) / 100,
         remoteMs: Math.round(remoteMs * 100) / 100,

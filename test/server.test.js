@@ -302,15 +302,16 @@ test("search endpoint returns explained matches", async () => {
   assert.equal(typeof body.timings.totalMs, "number");
 });
 
-test("local search returns immediately with an explicit provider state", async () => {
-  const response = await fetch(`${baseUrl}/api/search?q=Taylor%20Swift&mode=local`);
+test("local search corrects a misspelled artist intent before retrieval", async () => {
+  const response = await fetch(`${baseUrl}/api/search?q=kendrick%20llamar&mode=local`);
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.mode, "local");
   assert.equal(body.intent.type, "artist");
+  assert.equal(body.intent.entities.artist, "Kendrick Lamar");
   assert.equal(body.providerStatus.musicBrainz, "skipped");
   assert.equal(body.providerStatus.apple, "skipped");
-  assert.equal(body.results[0].artist, "Taylor Swift");
+  assert.equal(body.results[0].artist, "Kendrick Lamar");
 });
 
 test("recommendations return private metrics and explainable ranking", async () => {

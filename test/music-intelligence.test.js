@@ -4,6 +4,12 @@ import { buildMusicInsights, classifySearchIntent } from "../src/music-intellige
 
 test("classifies exact artists, mixed searches, and lyric fragments", () => {
   assert.equal(classifySearchIntent("Taylor Swift").type, "artist");
+  assert.deepEqual(classifySearchIntent("kendrick llamar"), {
+    type: "artist",
+    confidence: 0.9,
+    entities: { artist: "Kendrick Lamar" }
+  });
+  assert.equal(classifySearchIntent("taylor swfit").type, "artist");
   assert.equal(classifySearchIntent("Love Story Taylor Swift").type, "mixed");
   assert.equal(classifySearchIntent("we were both young when i first saw you").type, "lyrics");
   assert.equal(classifySearchIntent("Jolene").type, "track");
