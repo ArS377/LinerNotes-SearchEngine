@@ -11,12 +11,28 @@ remembered lyrics, then exploring playback links, credits, versions, and sources
 - Artist profiles and discographies for both local and globally discovered artists.
 - Saved songs and recent searches stored privately in the browser.
 - Optional exact Spotify links and ACRCloud audio or humming identification.
+- A React and TypeScript client with resilient request caching and accessible routing.
+- Optional Supabase authentication and private cross-device libraries.
+- Optional Redis response caching, request coalescing, and assistant rate limits.
+- A grounded OpenClaw discovery agent with structured citations and confidence labels.
+- OpenTelemetry instrumentation, structured logs, and optional Sentry reporting.
+
+## Architecture
+
+The React/Vite client consumes versioned, Zod-documented API contracts. The Node
+service federates provider requests, normalizes results, and applies relevance
+ranking. Redis is an optional distributed cache; without it the same interface
+uses a bounded process-local cache. Supabase PostgreSQL stores private libraries,
+history, and agent conversations with row-level security. Every managed service is
+optional, so local search continues to work with no credentials.
 
 ## Run locally
 
 Requires Node.js 22 or newer.
 
 ```bash
+npm ci
+npm run build:web
 npm start
 ```
 
@@ -57,11 +73,24 @@ Credentials are used only on the server and are never exposed to browser code.
 
 ```bash
 npm test
+npm run test:e2e
 ```
 
-The suite covers local relevance, provider normalization, artist profiles, search
-suggestions, federated deduplication, provider outages, exact/fallback playback
-links, audio identification signing, HTTP routes, and static asset behavior.
+The suite covers local relevance, provider normalization, federated deduplication,
+provider outages, caching, authentication boundaries, grounded-agent evaluation,
+HTTP contracts, and static asset behavior. Playwright runs the critical search and
+song journey on desktop and mobile Chromium and checks accessibility with Axe.
+
+## Managed services
+
+Apply `supabase/migrations/001_library.sql` to a Supabase project, then configure
+the three `SUPABASE_*` values. Set `REDIS_URL` to an Upstash Redis connection URL.
+Secrets are read only by the server; never use the Supabase service-role key in a
+Vite environment variable or browser bundle.
+
+`render.yaml` defines the production web service. Configure secrets in Render,
+deploy the Docker image, and use `/api/health` for readiness and `/api/status` for
+provider, cache, and runtime diagnostics.
 
 ## Deploy
 
