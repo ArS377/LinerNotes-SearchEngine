@@ -6,7 +6,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["src/**/*.{js,ts}", "test/**/*.js"],
+    files: ["src/**/*.{js,ts}", "test/**/*.js", "scripts/**/*.js"],
     languageOptions: {
       globals: {
         AbortSignal: "readonly",

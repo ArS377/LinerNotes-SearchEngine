@@ -13,6 +13,7 @@
     "test": "node --test && vitest run --passWithNoTests",
     "test:unit": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
+    "benchmark": "node scripts/benchmark-search.js",
     "test:relevance": "node --test test/relevance.test.js",
     "check": "npm run typecheck && npm run lint && node --check public/app.js && node --check src/server.js && node --check src/start.js && node --check src/search.js && node --check src/federated-search.js && node --check src/providers/openclaw.js"
   },
@@ -20,12 +21,10 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@fastify/static": "^9.3.0",
     "@opentelemetry/api": "^1.9.1",
     "@sentry/node": "^10.65.0",
     "@supabase/supabase-js": "^2.110.2",
     "@tanstack/react-query": "^5.101.2",
-    "fastify": "^5.10.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "redis": "^6.1.0",
