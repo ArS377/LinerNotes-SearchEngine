@@ -49,6 +49,7 @@ import {
   saveRecording
 } from "./services/library.js";
 import { createConversation, sendAgentMessage } from "./services/music-agent.js";
+import { logEvent, observeRequest } from "./observability.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -847,7 +848,12 @@ async function handleRequest(request, response) {
 }
 
 export const server = createServer((request, response) => {
-  handleRequest(request, response).catch(() => {
+  observeRequest(request, response, () => handleRequest(request, response)).catch((error) => {
+    logEvent("error", "http_request_failed", {
+      method: request.method,
+      path: request.url,
+      error: error.message
+    });
     if (response.headersSent) {
       response.destroy();
       return;
@@ -862,7 +868,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
 export function startServer(listenPort = port) {
   server.listen(listenPort, () => {
-    console.log(`Liner Notes is listening on http://localhost:${listenPort}`);
+    logEvent("info", "server_started", { port: listenPort });
   });
   return server;
 }
