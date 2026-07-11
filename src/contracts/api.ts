@@ -14,7 +14,13 @@ export const recordingSummarySchema = z.object({
   spotifyPopularity: z.number().min(0).max(100).nullable().optional()
 }).passthrough();
 
-export const providerStatusSchema = z.enum(["ok", "unavailable", "not-configured"]);
+export const providerStatusSchema = z.enum(["ok", "unavailable", "not-configured", "skipped"]);
+
+export const searchIntentSchema = z.object({
+  type: z.enum(["artist", "track", "lyrics", "mixed"]),
+  confidence: z.number().min(0).max(1),
+  entities: z.object({ artist: z.string().optional() }).passthrough()
+});
 
 export const searchQuerySchema = z.object({
   q: z.string().trim().min(1).max(200),
@@ -30,7 +36,38 @@ export const searchResponseSchema = z.object({
   providerStatus: z.record(z.string(), providerStatusSchema),
   offset: z.number().int().nonnegative(),
   nextOffset: z.number().int().positive(),
-  hasMore: z.boolean()
+  hasMore: z.boolean(),
+  intent: searchIntentSchema,
+  timings: z.object({
+    localMs: z.number().nonnegative(),
+    remoteMs: z.number().nonnegative(),
+    totalMs: z.number().nonnegative()
+  })
+});
+
+export const recommendationRequestSchema = z.object({
+  bookmarks: z.array(recordingSummarySchema).max(200).default([]),
+  recentQueries: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
+  limit: z.coerce.number().int().min(1).max(24).default(12)
+});
+
+export const recommendationResponseSchema = z.object({
+  profile: z.object({
+    bookmarkCount: z.number().int().nonnegative(),
+    searchCount: z.number().int().nonnegative(),
+    uniqueArtists: z.number().int().nonnegative(),
+    uniqueGenres: z.number().int().nonnegative(),
+    diversityScore: z.number().min(0).max(100),
+    topGenres: z.array(z.object({ name: z.string(), count: z.number() })),
+    topArtists: z.array(z.object({ name: z.string(), count: z.number() })),
+    decades: z.array(z.object({ name: z.string(), count: z.number() }))
+  }),
+  recommendations: z.array(recordingSummarySchema.extend({
+    reason: z.string(),
+    recommendationScore: z.number()
+  })),
+  generatedAt: z.string().datetime(),
+  method: z.literal("content-based-v1")
 });
 
 export const citationSchema = z.object({
@@ -82,6 +119,7 @@ export const environmentSchema = z.object({
 export type RecordingSummary = z.infer<typeof recordingSummarySchema>;
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
 export type AgentResponse = z.infer<typeof agentResponseSchema>;
+export type RecommendationResponse = z.infer<typeof recommendationResponseSchema>;
 
 export function parseEnvironment(environment: NodeJS.ProcessEnv) {
   return environmentSchema.parse(environment);

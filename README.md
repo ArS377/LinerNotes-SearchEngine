@@ -1,15 +1,18 @@
 # Liner Notes
 
-An independent music search engine for finding recordings by title, artist, or
-remembered lyrics, then exploring playback links, credits, versions, and sources.
+An explainable music-intelligence platform for finding a recording by title,
+artist, or remembered lyrics—and then following its artists, genres, versions,
+credits, provenance, and musical context.
 
 ## Features
 
-- Federated song search across local editorial data, MusicBrainz, and Apple Music.
-- Search suggestions, typo-tolerant matching, result pagination, and lyric fragments.
-- Song pages with lyrics availability, credits, source links, artwork, and previews.
-- Artist profiles and discographies for both local and globally discovered artists.
-- Saved songs and recent searches stored privately in the browser.
+- Progressive local-first search across editorial data, MusicBrainz, and Apple Music.
+- Typed query intent (artist, track, lyrics, or mixed), confidence, provider health,
+  filters, typo tolerance, result explanations, pagination, and measured latency.
+- Explore, genre, artist, song, and side-by-side version comparison experiences.
+- Private listening insights with diversity metrics and explainable recommendations.
+- Versioned bookmarks, comparisons, and recent searches stored only in the browser.
+- Rich song provenance, legal playback destinations, and authorized lyrics links.
 - Optional exact Spotify links and ACRCloud audio or humming identification.
 - A React and TypeScript client with resilient request caching and accessible routing.
 - Optional Supabase authentication and private cross-device libraries.
@@ -19,12 +22,15 @@ remembered lyrics, then exploring playback links, credits, versions, and sources
 
 ## Architecture
 
-The React/Vite client consumes versioned, Zod-documented API contracts. The Node
-service federates provider requests, normalizes results, and applies relevance
-ranking. Redis is an optional distributed cache; without it the same interface
-uses a bounded process-local cache. Supabase PostgreSQL stores private libraries,
-history, and agent conversations with row-level security. Every managed service is
-optional, so local search continues to work with no credentials.
+The React/Vite client consumes versioned Zod contracts. The Node service classifies
+intent, returns local matches immediately, federates provider requests, normalizes
+results, deduplicates versions, and applies relevance ranking. A deterministic
+content-based engine turns browser-supplied profile metadata into taste metrics and
+recommendations with a human-readable reason for every result.
+
+Every managed service is optional. Redis falls back to a bounded process-local
+cache; Supabase can add authenticated cross-device persistence; and the complete
+search, discovery, compare, and insights journey works without credentials.
 
 ## Run locally
 
@@ -37,6 +43,15 @@ npm start
 ```
 
 Open <http://localhost:3000>.
+
+For separate hot-reload servers during development, run these in two terminals:
+
+```bash
+npm run dev
+npm run dev:web
+```
+
+The API runs on port 3000 and Vite runs on port 5173.
 
 The app works without a `.env` file. Optional integrations can be configured by
 copying `.env.example` to `.env`.
@@ -52,6 +67,14 @@ Search combines three layers:
 
 No single provider contains every recording ever made. When one remote provider is
 unavailable, the others continue to return results.
+
+## Privacy and copyright
+
+The default profile never leaves the browser except as transient metadata sent to
+the recommendation endpoint; the server does not persist it. Bookmarks contain
+metadata and source URLs—not audio files. Liner Notes does not scrape or reproduce
+full lyrics. It links to authorized lyric destinations and labels unavailable
+capabilities honestly.
 
 ## Optional integrations
 
@@ -76,10 +99,11 @@ npm test
 npm run test:e2e
 ```
 
-The suite covers local relevance, provider normalization, federated deduplication,
-provider outages, caching, authentication boundaries, grounded-agent evaluation,
-HTTP contracts, and static asset behavior. Playwright runs the critical search and
-song journey on desktop and mobile Chromium and checks accessibility with Axe.
+The suite covers intent classification, explainable recommendations, local-first
+and federated contracts, relevance, provider normalization, deduplication, outages,
+caching, authentication boundaries, grounded-agent evaluation, and static assets.
+Playwright exercises search, song, comparison, and private-insights journeys on
+desktop and mobile Chromium and checks accessibility with Axe.
 
 Run `npm run benchmark` to reproduce the local ranking benchmark. On the release
 workstation, version 0.2.0 completed 100 representative searches at 0.168 ms p50,

@@ -50,6 +50,7 @@ import {
 } from "./services/library.js";
 import { createConversation, sendAgentMessage } from "./services/music-agent.js";
 import { logEvent, observeRequest } from "./observability.js";
+import { buildMusicInsights, classifySearchIntent } from "./music-intelligence.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -286,6 +287,18 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/v1/recommendations" && request.method === "POST") {
+    try {
+      const body = await readJson(request, 256 * 1024);
+      sendJson(response, 200, buildMusicInsights(body));
+    } catch (error) {
+      sendJson(response, error.code === "TOO_LARGE" ? 413 : 400, {
+        error: error.code === "TOO_LARGE" ? error.message : "Recommendation request must be valid JSON"
+      });
+    }
+    return;
+  }
+
   if (url.pathname === "/api/assistant" && request.method === "POST") {
     const clientKey = request.headers.authorization
       || request.socket.remoteAddress
@@ -493,7 +506,7 @@ async function handleRequest(request, response) {
   if (url.pathname === "/api/status") {
     sendJson(response, 200, {
       status: "ok",
-      version: "0.2.0",
+      version: "1.0.0",
       uptimeSeconds: Math.round(process.uptime()),
       providers: {
         musicBrainz: "enabled",
@@ -557,10 +570,31 @@ async function handleRequest(request, response) {
 
   if (url.pathname === "/api/search") {
     const query = url.searchParams.get("q") || "";
+    const mode = url.searchParams.get("mode") === "local" ? "local" : "federated";
     const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
+    const startedAt = performance.now();
+    const localStartedAt = performance.now();
+    const localResults = query ? searchRecordings(query, 20).map((result) => ({
+      ...result,
+      source: "Liner Notes",
+      external: false
+    })) : [];
+    const localMs = performance.now() - localStartedAt;
+    const remoteStartedAt = performance.now();
     const search = query
-      ? await cached(
-          `search:v1:${query.toLowerCase()}:${offset}`,
+      ? mode === "local"
+        ? {
+            results: localResults,
+            localCount: localResults.length,
+            globalCount: 0,
+            remoteStatus: "ok",
+            providerStatus: { musicBrainz: "skipped", apple: "skipped", spotify: "skipped" },
+            offset: 0,
+            nextOffset: 20,
+            hasMore: false
+          }
+        : await cached(
+          `search:v2:${query.toLowerCase()}:${offset}`,
           () => federatedSearch(query, { offset }),
           { ttlSeconds: 300, staleSeconds: 900 }
         )
@@ -571,11 +605,20 @@ async function handleRequest(request, response) {
           remoteStatus: "ok",
           offset: 0,
           nextOffset: 20,
-          hasMore: false
+          hasMore: false,
+          providerStatus: { musicBrainz: "skipped", apple: "skipped", spotify: "skipped" }
         };
+    const remoteMs = mode === "local" ? 0 : performance.now() - remoteStartedAt;
     sendJson(response, 200, {
       query,
-      ...search
+      mode,
+      ...search,
+      intent: classifySearchIntent(query),
+      timings: {
+        localMs: Math.round(localMs * 100) / 100,
+        remoteMs: Math.round(remoteMs * 100) / 100,
+        totalMs: Math.round((performance.now() - startedAt) * 100) / 100
+      }
     });
     return;
   }

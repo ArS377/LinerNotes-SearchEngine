@@ -1,4 +1,4 @@
-import type { AgentResponse, SearchResponse } from "../src/contracts/api.js";
+import type { AgentResponse, RecommendationResponse, RecordingSummary, SearchResponse } from "../src/contracts/api.js";
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -15,10 +15,17 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
-export function searchMusic(query: string, offset = 0) {
+export function searchMusic(query: string, offset = 0, mode: "local" | "federated" = "federated") {
   return api<SearchResponse & { query: string }>(
-    `/api/search?q=${encodeURIComponent(query)}&offset=${offset}`
+    `/api/search?q=${encodeURIComponent(query)}&offset=${offset}&mode=${mode}`
   );
+}
+
+export function getRecommendations(bookmarks: RecordingSummary[], recentQueries: string[]) {
+  return api<RecommendationResponse>("/api/v1/recommendations", {
+    method: "POST",
+    body: JSON.stringify({ bookmarks, recentQueries, limit: 12 })
+  });
 }
 
 export function askAgent(prompt: string, context: Record<string, unknown>) {

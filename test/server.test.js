@@ -298,6 +298,42 @@ test("search endpoint returns explained matches", async () => {
   assert.equal(body.remoteStatus, "ok");
   assert.equal(body.offset, 0);
   assert.equal(typeof body.hasMore, "boolean");
+  assert.equal(body.intent.type, "lyrics");
+  assert.equal(typeof body.timings.totalMs, "number");
+});
+
+test("local search returns immediately with an explicit provider state", async () => {
+  const response = await fetch(`${baseUrl}/api/search?q=Taylor%20Swift&mode=local`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.mode, "local");
+  assert.equal(body.intent.type, "artist");
+  assert.equal(body.providerStatus.musicBrainz, "skipped");
+  assert.equal(body.providerStatus.apple, "skipped");
+  assert.equal(body.results[0].artist, "Taylor Swift");
+});
+
+test("recommendations return private metrics and explainable ranking", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/recommendations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      bookmarks: [{
+        slug: "jolene-dolly-parton",
+        title: "Jolene",
+        artist: "Dolly Parton",
+        genres: ["Country"],
+        releaseDate: "1973-10-15"
+      }],
+      recentQueries: ["Dolly Parton"]
+    })
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.profile.bookmarkCount, 1);
+  assert.equal(body.profile.topArtists[0].name, "Dolly Parton");
+  assert.equal(body.recommendations[0].slug, "love-story-taylor-swift");
+  assert.match(body.recommendations[0].reason, /country/i);
 });
 
 test("suggest endpoint returns local and commercial candidates", async () => {
