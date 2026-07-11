@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: liner-notes
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MUSICBRAINZ_CONTACT
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: OPENCLAW_BASE_URL
+        sync: false
+      - key: OPENCLAW_API_KEY
+        sync: false

@@ -1,3 +1,16 @@
+FROM node:22-alpine AS web-build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json vite.config.ts ./
+COPY web ./web
+COPY src/contracts ./src/contracts
+COPY public ./public
+RUN npm run build:web
+
 FROM node:22-alpine
 
 ENV NODE_ENV=production
@@ -5,8 +18,10 @@ ENV PORT=3000
 
 WORKDIR /app
 
-COPY --chown=node:node package.json README.md ./
-COPY --chown=node:node public ./public
+COPY --chown=node:node package.json package-lock.json README.md ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY --chown=node:node --from=web-build /app/public ./public
 COPY --chown=node:node src ./src
 
 USER node
