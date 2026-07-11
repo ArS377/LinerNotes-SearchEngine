@@ -55,6 +55,11 @@ function queryNamesArtist(query, results) {
   });
 }
 
+function isExactArtistIntent(query, results) {
+  const normalizedQuery = normalize(query);
+  return results.some((result) => normalize(result.artist) === normalizedQuery);
+}
+
 function unifiedRelevance(query, result) {
   const textScore = globalRelevance(query, result);
   if (result.external) return textScore;
@@ -178,7 +183,12 @@ export async function federatedSearch(
 
   const candidates = [...enrichedLocal, ...uniqueRemote];
   const hasArtistIntent = queryNamesArtist(query, candidates);
+  const exactArtistIntent = isExactArtistIntent(query, candidates);
   const results = candidates
+    .filter((result) => {
+      if (!exactArtistIntent) return true;
+      return normalize(result.artist) === normalize(query);
+    })
     .sort(
       (left, right) => {
         if (!hasArtistIntent) {

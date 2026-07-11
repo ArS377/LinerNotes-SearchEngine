@@ -87,11 +87,9 @@ main { min-height: calc(100vh - 146px); }
 .text-link { min-height: 44px; padding: 0; border: 0; border-bottom: 1px solid currentColor; background: transparent; font-weight: 700; cursor: pointer; }
 
 .assistant-panel { margin-bottom: 72px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.assistant-panel summary { display: flex; min-height: 86px; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; }
-.assistant-panel summary::-webkit-details-marker { display: none; }
-.assistant-panel summary strong { display: block; margin-top: 7px; font-family: var(--serif); font-size: 1.55rem; font-weight: 500; }
-.assistant-panel[open] summary > span:last-child { transform: rotate(45deg); }
-.assistant-panel__body { display: grid; grid-template-columns: minmax(0, var(--reading)) minmax(180px, 1fr); gap: 36px; padding: 0 0 32px; }
+.assistant-panel { padding: 32px 0; }
+.assistant-panel__heading h2 { margin: 7px 0 26px; font-family: var(--serif); font-size: 1.7rem; font-weight: 500; }
+.assistant-panel__body { display: grid; grid-template-columns: minmax(0, var(--reading)) minmax(180px, 1fr); gap: 36px; }
 .assistant-form textarea { width: 100%; min-height: 110px; padding: 13px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); line-height: 1.5; resize: vertical; }
 .assistant-form button { min-height: 44px; margin-top: 10px; padding: 0 16px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); font-weight: 700; cursor: pointer; }
 .assistant-response { color: var(--muted); font-size: 0.92rem; line-height: 1.55; }
@@ -108,9 +106,21 @@ main { min-height: calc(100vh - 146px); }
 .song-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 360px); gap: clamp(42px, 8vw, 120px); align-items: end; padding: 44px 0 70px; border-bottom: 1px solid var(--line); }
 .song-hero h1 { max-width: 800px; margin: 14px 0; font-family: var(--serif); font-size: clamp(3.7rem, 7vw, 7rem); font-weight: 500; line-height: 0.86; letter-spacing: -0.06em; text-wrap: balance; }
 .song-artist { margin: 0 0 30px; color: var(--muted); font-size: 1.15rem; }
+.song-release { margin: -18px 0 30px; color: var(--muted); font-size: 0.92rem; }
 .song-hero img { width: 100%; aspect-ratio: 1; object-fit: cover; }
-.story-section { max-width: var(--reading); padding: 72px 0; }
+.song-details { display: grid; grid-template-columns: minmax(0, var(--reading)) minmax(220px, 1fr); gap: 64px clamp(42px, 7vw, 120px); padding: 72px 0; }
+.story-section { grid-column: 1; max-width: var(--reading); }
 .story-section > p:last-child { margin: 14px 0 0; font-family: var(--serif); font-size: clamp(1.5rem, 2.5vw, 2.15rem); line-height: 1.28; }
+.song-info { grid-column: 2; grid-row: 1 / span 2; border-top: 1px solid var(--line); }
+.song-info > div, .lyrics-section, .sources-section { padding-top: 18px; }
+.genre-listing { margin: 10px 0 22px; color: var(--muted); line-height: 1.5; }
+.song-info dl { margin: 0; border-top: 1px solid var(--line); }
+.song-info dt, .song-info dd { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.song-info dt { color: var(--muted); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.song-info dd { font-size: 0.95rem; line-height: 1.45; }
+.lyrics-section, .sources-section { grid-column: 1; max-width: var(--reading); border-top: 1px solid var(--line); }
+.lyrics-section > p:nth-child(2), .sources-section > p:nth-child(2) { margin: 10px 0 0; color: var(--muted); line-height: 1.55; }
+.lyrics-section a { display: inline-block; margin-top: 14px; color: var(--blue); font-weight: 700; }
 .song-view .assistant-panel { margin-top: 10px; }
 
 footer { background: var(--ink); color: #c5c2b9; }
@@ -144,6 +154,8 @@ footer p { margin: 0; }
   .collection-view { padding-top: 70px; }
   .song-hero { grid-template-columns: 1fr; padding-top: 36px; }
   .song-hero img { width: min(320px, 78vw); }
+  .song-details { display: block; padding: 54px 0; }
+  .song-info, .lyrics-section, .sources-section { margin-top: 44px; }
   footer .shell { min-height: 108px; align-items: flex-start; justify-content: center; flex-direction: column; padding-block: 22px; }
 }
 

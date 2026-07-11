@@ -137,6 +137,26 @@ test("an artist-specific match outranks a more prominent title-only match", asyn
   assert.equal(result.results[0].slug, "apple-little-big-town");
 });
 
+test("treats an exact artist query as an artist intent, not a song title", async () => {
+  const result = await federatedSearch("Taylor Swift", {
+    musicBrainzSearch: async () => [
+      {
+        slug: "mbid-title-only",
+        title: "Taylor Swift",
+        artist: "Moon Moon Moon",
+        source: "MusicBrainz",
+        external: true,
+        score: 100
+      }
+    ],
+    appleSearch: async () => []
+  });
+
+  assert.ok(result.results.length > 0);
+  assert.ok(result.results.every((recording) => recording.artist === "Taylor Swift"));
+  assert.ok(result.results.some((recording) => recording.slug === "love-story-taylor-swift"));
+});
+
 test("merges Apple playback data into an equivalent MusicBrainz result", async () => {
   const result = await federatedSearch("Dreams Fleetwood Mac", {
     musicBrainzSearch: async () => [

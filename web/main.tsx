@@ -79,8 +79,8 @@ function ResultCard({ recording, saved, onSave }: { recording: RecordingSummary;
 function AgentPanel({ context }: { context: Record<string, unknown> }) {
   const [prompt, setPrompt] = useState("");
   const mutation = useMutation({ mutationFn: () => askAgent(prompt, context) });
-  return <details className="assistant-panel">
-    <summary><span><span className="eyebrow">Grounded discovery</span><strong>Ask about these results</strong></span><span aria-hidden="true">+</span></summary>
+  return <section className="assistant-panel">
+    <div className="assistant-panel__heading"><span className="eyebrow">Grounded discovery</span><h2>Ask about these results</h2></div>
     <div className="assistant-panel__body">
       <form className="assistant-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
         <label htmlFor="agent-prompt">Ask the music agent</label>
@@ -92,7 +92,7 @@ function AgentPanel({ context }: { context: Record<string, unknown> }) {
         {mutation.data && <><p>{mutation.data.answer}</p>{mutation.data.citations.length > 0 && <ul>{mutation.data.citations.map((citation, index) => <li key={`${citation.title}-${index}`}>{citation.url ? <a href={citation.url} rel="noreferrer" target="_blank">{citation.title}</a> : citation.title}</li>)}</ul>}<small>Confidence: {mutation.data.confidence}</small></>}
       </div>
     </div>
-  </details>;
+  </section>;
 }
 
 function SearchResults({ query, saved, toggle }: { query: string; saved: RecordingSummary[]; toggle: (recording: RecordingSummary) => void }) {
@@ -119,7 +119,12 @@ function Song({ slug, saved, toggle }: { slug: string; saved: RecordingSummary[]
   const data = song.data as Record<string, unknown> & { title: string; artist: string | { name: string }; artworkUrl?: string; story?: string };
   const artist = typeof data.artist === "string" ? data.artist : data.artist.name;
   const summary: RecordingSummary = { slug, title: data.title, artist, artworkUrl: data.artworkUrl };
-  return <article className="song-view"><div className="shell"><button className="text-link" onClick={() => history.back()}>← Back to results</button><div className="song-hero"><div><p className="eyebrow">Liner notes</p><h1>{data.title}</h1><p className="song-artist">{artist}</p><button className="save-button" onClick={() => toggle(summary)}>{saved.some((item) => item.slug === slug) ? "Remove from saved" : "Save recording"}</button></div>{data.artworkUrl && <img src={data.artworkUrl} alt="" />}</div>{data.story && <section className="story-section"><p className="eyebrow">The story</p><p>{data.story}</p></section>}<AgentPanel context={{ type: "song", song: data }} /></div></article>;
+  const credits = Array.isArray(data.credits) ? data.credits as Array<[string, string]> : [];
+  const genres = Array.isArray(data.genres) ? data.genres as string[] : [];
+  const lyrics = data.lyrics as { status?: string; message?: string; searchUrl?: string } | undefined;
+  const sources = Array.isArray(data.sources) ? data.sources as string[] : [];
+  const release = [data.album, data.releaseDate, data.duration].filter(Boolean).join(" · ");
+  return <article className="song-view"><div className="shell"><button className="text-link" onClick={() => history.back()}>← Back to results</button><div className="song-hero"><div><p className="eyebrow">Liner notes</p><h1>{data.title}</h1><p className="song-artist">{artist}</p>{release && <p className="song-release">{release}</p>}<button className="save-button" onClick={() => toggle(summary)}>{saved.some((item) => item.slug === slug) ? "Remove from saved" : "Save recording"}</button></div>{data.artworkUrl && <img src={data.artworkUrl} alt="" />}</div><div className="song-details">{data.story && <section className="story-section"><p className="eyebrow">About the song</p><p>{data.story}</p></section>}<section className="song-info"><div><p className="eyebrow">Recording details</p>{genres.length > 0 && <p className="genre-listing">{genres.join(" · ")}</p>}</div>{credits.length > 0 && <dl>{credits.map(([label, value]) => <React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>}</section><section className="lyrics-section"><p className="eyebrow">Lyrics</p><p>{lyrics?.message || "Lyrics availability has not been confirmed for this recording."}</p>{lyrics?.searchUrl && <a href={lyrics.searchUrl} target="_blank" rel="noreferrer">Find lyrics from an authorized source ↗</a>}</section><section className="sources-section"><p className="eyebrow">Sources</p><p>{sources.length ? sources.join(" · ") : "Source details are unavailable."}</p></section></div><AgentPanel context={{ type: "song", song: data }} /></div></article>;
 }
 
 function Home() {
