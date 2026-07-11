@@ -493,7 +493,7 @@ async function handleRequest(request, response) {
   if (url.pathname === "/api/status") {
     sendJson(response, 200, {
       status: "ok",
-      version: "0.1.0",
+      version: "0.2.0",
       uptimeSeconds: Math.round(process.uptime()),
       providers: {
         musicBrainz: "enabled",

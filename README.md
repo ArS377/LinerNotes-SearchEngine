@@ -81,6 +81,11 @@ provider outages, caching, authentication boundaries, grounded-agent evaluation,
 HTTP contracts, and static asset behavior. Playwright runs the critical search and
 song journey on desktop and mobile Chromium and checks accessibility with Axe.
 
+Run `npm run benchmark` to reproduce the local ranking benchmark. On the release
+workstation, version 0.2.0 completed 100 representative searches at 0.168 ms p50,
+0.344 ms p95, and 1.348 ms maximum. These figures measure only the in-process
+ranking algorithm and do not represent network-provider or production latency.
+
 ## Managed services
 
 Apply `supabase/migrations/001_library.sql` to a Supabase project, then configure
