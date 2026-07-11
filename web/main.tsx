@@ -60,7 +60,7 @@ function SearchBox({ initial = "" }: { initial?: string }) {
     <form className="hero-search" role="search" data-search-form onSubmit={submit}>
       <label className="sr-only" htmlFor="hero-query">Search music</label>
       <input id="hero-query" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try any song, artist, or lyric" />
-      <button type="submit"><span>Search</span><span aria-hidden="true">↗</span></button>
+      <button type="submit" aria-label="Search"><span>Search</span><span aria-hidden="true">↗</span></button>
     </form>
   );
 }
