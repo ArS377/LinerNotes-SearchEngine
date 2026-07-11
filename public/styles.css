@@ -716,6 +716,30 @@ main {
   transform: translateX(8px);
 }
 
+.wordmark,
+nav button,
+.result-card-link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.result-card-link {
+  display: grid;
+  grid-column: 1 / 4;
+  grid-template-columns: 86px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  padding: 0;
+  text-align: left;
+}
+
+.result-card .save-button {
+  justify-self: end;
+}
+
 .result-art,
 .song-art {
   position: relative;
