@@ -71,6 +71,19 @@ export function classifySearchIntent(rawQuery) {
   return { type: "track", confidence: tokens.length > 1 ? 0.72 : 0.58, entities: {} };
 }
 
+export function resolveSearchIntent(initialIntent, rawQuery, results = []) {
+  if (initialIntent.type !== "track") return initialIntent;
+  const query = normalize(rawQuery || "");
+  const exactArtistResults = results.filter((result) => normalize(result.artist || "") === query);
+  const distinctTitles = new Set(exactArtistResults.map((result) => normalize(result.title || "")));
+  if (exactArtistResults.length < 3 || distinctTitles.size < 3) return initialIntent;
+  return {
+    type: "artist",
+    confidence: 0.94,
+    entities: { artist: exactArtistResults[0].artist }
+  };
+}
+
 export function catalogSummaries() {
   return recordings.map((recording) => {
     const artist = artistById.get(recording.artistId);

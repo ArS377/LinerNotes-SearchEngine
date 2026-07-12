@@ -50,7 +50,11 @@ import {
 } from "./services/library.js";
 import { createConversation, sendAgentMessage } from "./services/music-agent.js";
 import { logEvent, observeRequest } from "./observability.js";
-import { buildMusicInsights, classifySearchIntent } from "./music-intelligence.js";
+import {
+  buildMusicInsights,
+  classifySearchIntent,
+  resolveSearchIntent
+} from "./music-intelligence.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -613,11 +617,12 @@ async function handleRequest(request, response) {
           providerStatus: { musicBrainz: "skipped", apple: "skipped", spotify: "skipped" }
         };
     const remoteMs = mode === "local" ? 0 : performance.now() - remoteStartedAt;
+    const resolvedIntent = resolveSearchIntent(intent, query, search.results);
     sendJson(response, 200, {
       query,
       mode,
       ...search,
-      intent,
+      intent: resolvedIntent,
       timings: {
         localMs: Math.round(localMs * 100) / 100,
         remoteMs: Math.round(remoteMs * 100) / 100,

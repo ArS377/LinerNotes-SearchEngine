@@ -191,6 +191,15 @@ export async function federatedSearch(
     })
     .sort(
       (left, right) => {
+        if (exactArtistIntent) {
+          const leftCommercial = Number.isFinite(left.providerRank);
+          const rightCommercial = Number.isFinite(right.providerRank);
+          if (leftCommercial !== rightCommercial) return rightCommercial - leftCommercial;
+          if (leftCommercial && rightCommercial) {
+            const rankDifference = left.providerRank - right.providerRank;
+            if (rankDifference !== 0) return rankDifference;
+          }
+        }
         if (!hasArtistIntent) {
           const leftTitleIntent = isTitleIntentMatch(query, left);
           const rightTitleIntent = isTitleIntentMatch(query, right);

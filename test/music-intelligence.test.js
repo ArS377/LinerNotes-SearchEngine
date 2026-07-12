@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildMusicInsights, classifySearchIntent } from "../src/music-intelligence.js";
+import {
+  buildMusicInsights,
+  classifySearchIntent,
+  resolveSearchIntent
+} from "../src/music-intelligence.js";
 
 test("classifies exact artists, mixed searches, and lyric fragments", () => {
   assert.equal(classifySearchIntent("Taylor Swift").type, "artist");
@@ -13,6 +17,21 @@ test("classifies exact artists, mixed searches, and lyric fragments", () => {
   assert.equal(classifySearchIntent("Love Story Taylor Swift").type, "mixed");
   assert.equal(classifySearchIntent("we were both young when i first saw you").type, "lyrics");
   assert.equal(classifySearchIntent("Jolene").type, "track");
+});
+
+test("resolves an external artist from repeated exact credits", () => {
+  const initial = classifySearchIntent("Ken Carson");
+  const results = ["Get Rich Or Die", "delusional", "Freestyle 2"].map((title) => ({
+    title,
+    artist: "Ken Carson",
+    source: "Apple Music"
+  }));
+  assert.deepEqual(resolveSearchIntent(initial, "Ken Carson", results), {
+    type: "artist",
+    confidence: 0.94,
+    entities: { artist: "Ken Carson" }
+  });
+  assert.equal(resolveSearchIntent(initial, "Love Story", results).type, "track");
 });
 
 test("builds private taste metrics and explainable recommendations", () => {

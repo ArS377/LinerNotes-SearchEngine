@@ -157,6 +157,29 @@ test("treats an exact artist query as an artist intent, not a song title", async
   assert.ok(result.results.some((recording) => recording.slug === "love-story-taylor-swift"));
 });
 
+test("prefers ranked commercial recordings when exact artist names collide", async () => {
+  const result = await federatedSearch("Ken Carson", {
+    musicBrainzSearch: async () => ({ results: [{
+      slug: "mbid-country",
+      title: "Foggy, Foggy Dew",
+      artist: "Ken Carson",
+      source: "MusicBrainz",
+      external: true,
+      score: 48
+    }], total: 1 }),
+    appleSearch: async () => ({ results: [{
+      slug: "apple-rap",
+      title: "Get Rich Or Die",
+      artist: "Ken Carson",
+      source: "Apple Music",
+      external: true,
+      score: 0
+    }], total: 1 }),
+    spotifySearch: async () => ({ results: [], configured: false })
+  });
+  assert.equal(result.results[0].slug, "apple-rap");
+});
+
 test("merges Apple playback data into an equivalent MusicBrainz result", async () => {
   const result = await federatedSearch("Dreams Fleetwood Mac", {
     musicBrainzSearch: async () => [
