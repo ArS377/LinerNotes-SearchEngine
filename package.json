@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "start": "node src/start.js",
-    "test": "node --test && vitest run --passWithNoTests",
+    "test": "node --test test/*.test.js && vitest run --passWithNoTests",
     "test:unit": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
     "benchmark": "node scripts/benchmark-search.js",
