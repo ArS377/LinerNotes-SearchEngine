@@ -26,19 +26,28 @@ export async function resolveSeed(slug) {
   else if (/^mbid-[0-9a-f-]{36}$/i.test(slug)) result = await lookupMusicBrainzRecording(slug.slice(5));
   else result = getRecording(slug);
   if (!result) { const error = new Error("Recording not found. Choose a song from search."); error.status = 404; throw error; }
-  return summary(result, slug);
+  const seed = summary(result, slug);
+  if (!seed.genres.length) {
+    try {
+      const payload = await searchAppleMusic(`${seed.title} ${seed.artist}`, 5);
+      const match = payload.results.find((item) => normalize(item.title) === normalize(seed.title) && normalize(item.artist) === normalize(seed.artist));
+      if (match) { seed.genres = match.genres; seed.genreSource = "Apple Music"; }
+    } catch { /* Missing tags remain unknown when the secondary catalog is unavailable. */ }
+  }
+  return seed;
 }
 
 export function rankCandidates(seed, candidates, options) {
   const selectedWeights = weights[options.focus] || weights.balanced;
   const seedGenres = genresOf(seed), seedYear = yearOf(seed);
   const excluded = new Set([seed.slug, ...(options.excludeSlugs || [])]);
+  const excludedIdentities = new Set(candidates.filter((item) => excluded.has(item.slug)).map(identity));
   const knownArtists = new Set((options.knownArtists || []).map(normalize));
   const seen = new Set([identity(seed)]);
   const pool = [];
   for (const item of candidates) {
     const key = identity(item), artist = normalize(item.artist);
-    if (seen.has(key) || excluded.has(item.slug)) continue;
+    if (seen.has(key) || excluded.has(item.slug) || excludedIdentities.has(key)) continue;
     if (options.differentArtists && artist === normalize(seed.artist)) continue;
     if (options.unfamiliarArtists && knownArtists.has(artist)) continue;
     seen.add(key);
@@ -51,8 +60,8 @@ export function rankCandidates(seed, candidates, options) {
     if (options.focus === "era" && gap === null) continue;
     const score = selectedWeights.genre * genreScore + selectedWeights.era * eraScore;
     const reasons = [];
-    if (shared.length) reasons.push(`Shares ${shared.join(" and ")} catalog tags with ${seed.title}.`);
-    if (gap !== null && selectedWeights.era > 0) reasons.push(`Released in ${itemYear}, ${gap === 0 ? "the same year as" : `${gap} year${gap === 1 ? "" : "s"} from`} your starting track (${seedYear}).`);
+    if (shared.length) reasons.push(`Shares ${new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(shared)} catalog tags with ${seed.title}.`);
+    if (gap !== null && selectedWeights.era > 0) reasons.push(`Catalog release year: ${itemYear}, ${gap === 0 ? "the same year as" : `${gap} year${gap === 1 ? "" : "s"} from`} your starting track (${seedYear}).`);
     if (options.unfamiliarArtists) reasons.push("This artist is not in your current bookmarks.");
     const evidence = { genres: shared, seedYear, candidateYear: itemYear, source: item.source || "Liner Notes", url: item.musicBrainzId ? `https://musicbrainz.org/recording/${item.musicBrainzId}` : item.appleMusicUrl || null };
     pool.push({ ...item, reasons, evidence, score: Number(score.toFixed(4)), components: { genre: Number(genreScore.toFixed(4)), era: Number(eraScore.toFixed(4)) } });
@@ -64,7 +73,9 @@ export function rankCandidates(seed, candidates, options) {
     for (let index = 0; index < pool.length; index++) {
       const candidate = pool[index];
       const redundancy = selected.length ? Math.max(...selected.map((item) =>
-        (normalize(item.artist) === normalize(candidate.artist) ? 0.85 : 0) + 0.15 * jaccard(genresOf(item), genresOf(candidate))
+        Math.max(normalize(item.artist) === normalize(candidate.artist) ? 0.85 : 0,
+          item.album && candidate.album && normalize(item.album) !== "release unknown" && normalize(item.album) === normalize(candidate.album) ? 0.8 : 0)
+          + 0.15 * jaccard(genresOf(item), genresOf(candidate))
       )) : 0;
       const value = 0.75 * candidate.score - 0.25 * redundancy;
       if (value > bestValue) { bestIndex = index; bestValue = value; }
@@ -114,6 +125,6 @@ export async function discover(rawOptions, dependencies = {}) {
     seed, items, providerStatus: retrieval.providerStatus,
     method: "metadata-mmr-v1", weights: weights[options.focus],
     candidateCount: retrieval.candidates.length,
-    limitations: ["Matches use catalog tags and release dates, not audio similarity.", ...(retrieval.providerStatus === "unavailable" ? ["MusicBrainz is unavailable; only the local catalog was searched."] : []), ...(items.length < options.limit ? ["There are fewer matching recordings than requested. Try another focus or allow the same artist."] : [])]
+    limitations: ["Matches use catalog tags and release dates, not audio similarity.", "Catalog dates can refer to reissues; they are not verified recording dates.", ...(retrieval.providerStatus === "unavailable" ? ["MusicBrainz is unavailable; only the local catalog was searched."] : []), ...(items.length < options.limit ? ["There are fewer matching recordings than requested. Try another focus or allow the same artist."] : [])]
   };
 }

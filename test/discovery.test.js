@@ -22,6 +22,10 @@ test("same-artist filtering is explicit and can be disabled", () => {
   assert.equal(rankCandidates(seed, [item], options).length, 0);
   assert.equal(rankCandidates(seed, [item], { ...options, differentArtists: false }).length, 1);
 });
+test("dismissed recordings cannot reappear under a second catalog identifier", () => {
+  const items = [candidate("hidden"), candidate("alias", { title: "hidden", artist: "Artist hidden" }), candidate("ok")];
+  assert.deepEqual(rankCandidates(seed, items, { ...options, excludeSlugs: ["hidden"] }).map((item) => item.slug), ["ok"]);
+});
 test("MMR favors a different artist over an equally relevant repeat", () => {
   const items = [candidate("a", { artist: "Repeat" }), candidate("b", { artist: "Repeat" }), candidate("c")];
   assert.deepEqual(rankCandidates(seed, items, options).map((item) => item.slug), ["a", "c", "b"]);
@@ -33,6 +37,10 @@ test("missing metadata never produces invented dates or audio claims", () => {
   assert.equal(result.reasons.length, 1);
   assert.match(result.reasons[0], /catalog tags/);
   assert.equal(rankCandidates(seed, [candidate("unknown", { releaseDate: null })], { ...options, focus: "era" }).length, 0);
+});
+test("MMR reduces repetition from the same compilation", () => {
+  const items = [candidate("a", { album: "Same compilation" }), candidate("b", { album: "Same compilation" }), candidate("c", { album: "Another album" })];
+  assert.deepEqual(rankCandidates(seed, items, options).map((item) => item.slug), ["a", "c", "b"]);
 });
 test("unrelated tracks do not fill a short recommendation list", () => {
   assert.equal(rankCandidates(seed, [candidate("unrelated", { genres: ["classical"] })], options).length, 0);
