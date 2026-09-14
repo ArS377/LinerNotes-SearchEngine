@@ -3,25 +3,24 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Search for songs, artists, and remembered lyrics, then explore the story behind each recording.">
-    <title>Liner Notes - Find the song. Know the story.</title>
+    <meta name="theme-color" content="#ff765f">
+    <meta name="description" content="Find the song you’re looking for. Search artists and remembered lyrics, preview recordings, compare versions, and discover your next favorite with Liner Notes.">
+    <title>Liner Notes — Music search & discovery</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <div id="root">
-      <main id="app" tabindex="-1">
-        <section class="hero">
-          <p class="eyebrow">A search engine for music</p>
-          <h1>Find the song.<br><em>Know the story.</em></h1>
-          <form role="search" data-search-form>
-            <label class="sr-only" for="hero-query">Search music</label>
-            <input id="hero-query" name="q" type="search">
-          </form>
-          <div data-results-list aria-live="polite"></div>
-        </section>
+      <main id="app" class="shell page-view">
+        <h1>What’s that song?</h1>
+        <form role="search" action="/search" method="get" class="search-form" data-search-form>
+          <label class="sr-only" for="hero-query">Search music</label>
+          <div class="search-form__field"><input id="hero-query" name="q" type="search" placeholder="A song, an artist, a remembered lyric"><button type="submit">Search</button></div>
+        </form>
+        <div data-results-list aria-live="polite"></div>
+        <p role="status" aria-live="polite">Opening Liner Notes…</p>
       </main>
-      <div role="status" aria-live="polite"></div>
     </div>
+    <noscript>Enable JavaScript to search and explore music in Liner Notes.</noscript>
     <script type="module" src="/main.tsx"></script>
   </body>
 </html>
