@@ -1,38 +1,43 @@
 # Liner Notes design system
 
-Liner Notes is an editorial music search tool: expressive when helping someone
-remember a song, quiet and dense when helping them choose a result.
+Liner Notes is a music search and discovery tool for curious listeners. Search
+comes first; actual recordings, artwork, previews and credits give it personality.
+
+## Direction
+
+Use a record-shop shelf, not a promotional landing page. The signature is a row of
+real covers with titles, artists, years and immediate preview/save/compare actions.
+Avoid giant slogans, serif display text, ornamental record diagrams and empty space.
+
+## Tokens
+
+- Ink: #242321
+- Page: #fafafa; white surfaces: #ffffff
+- Coral: #ff765f for primary actions; #a53b2a for accessible accent text and focus
+- Muted text: #67635f; borders: #dedbd7
+- Retain the existing #f2f0e9 only in the compact search area.
+- Barlow Condensed 600/700: wordmark, restrained page titles and section headings
+- Barlow 400/500/600/700: search, body, navigation and recording information
+- Body: 16px; secondary text: 14px; compact recording metadata: 12px
 
 ## Layout
 
-- Use the shared `--shell` width (1200px) and `--gutter` for all useful content.
-- Keep prose and forms within `--reading` (720px) unless a result list needs the
-  full shell.
-- Decorative artwork may exceed the shell; text, controls, and navigation may not.
-
-## Type
-
-- `Newsreader` is for display titles, song titles, and editorial story text.
-- `DM Sans` is for navigation, search controls, metadata, and body copy.
-- Oversized display type belongs on the homepage and song detail pages only.
-- Body copy is at least 16px; utility labels are uppercase, high-contrast, and
-  never the only means of communicating hierarchy.
-
-## Color and surfaces
-
-- Paper: `--paper`; ink: `--ink`; accent: `--blue`; signal: `--coral`.
-- Use one-pixel `--line` borders for grouping. Avoid decorative shadows and cards.
-- `--blue` is reserved for emphasis and focus, not broad background fills.
+Use a centered 1280px maximum content width with a shared responsive gutter.
+Navigation stays horizontal; mobile navigation can scroll without wrapping labels.
+The shelf uses six columns on wide screens, three on tablets and two on phones.
+Results use compact artwork rows. Detail pages pair cover art with recording
+information. Mobile comparisons scroll horizontally to preserve side-by-side context.
 
 ## Interaction
 
-- Search is the primary action. Results appear before research tools.
-- Buttons and touch targets have a minimum 44px height.
-- Focus states are always visible. Disclosure is preferred to persistent secondary
-  panels when it competes with a primary task.
+Keep buttons simple, with at most 8px radii. Use borders and spacing for hierarchy,
+without gradients, floating card shadows, uppercase eyebrows or hover transforms.
+The slash key focuses search. Lyrics mode submits a quoted lyric query. Era filters
+apply to the shelf; source, genre and sort controls apply to search results.
+Every cover opens a real recording. Show previews only when the playback API provides
+one; audio starts only after a listener action. Keep a single player across navigation.
+Artwork comes from the existing playback endpoint, with a labeled fallback on failure.
 
-## Responsive behavior
-
-- 480px: compact mobile layout.
-- 820px: single-column content and results.
-- 1200px: full shell with decorative hero art.
+Use visible focus, semantic labels, live error messages and reduced-motion support.
+Bookmarks and comparisons use the existing browser profile. Do not label selected
+records as trending, personalized, or currently playing without data supporting it.
