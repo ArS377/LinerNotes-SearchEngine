@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { discover } from "./discovery.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize as normalizePath } from "node:path";
 import { Readable } from "node:stream";
@@ -288,6 +289,22 @@ async function handleRequest(request, response) {
       openClawAssistant: openClawConfigured(),
       authenticatedLibrary: libraryConfigured()
     });
+    return;
+  }
+
+  if (url.pathname === "/api/v1/discover" && request.method === "POST") {
+    const allowance = await rateLimit(`discover:${request.socket.remoteAddress || "anonymous"}`, { limit: 30, windowSeconds: 60 });
+    if (!allowance.allowed) {
+      sendJson(response, 429, { error: "Too many discovery requests. Try again in a minute." });
+      return;
+    }
+    try {
+      const body = await readJson(request);
+      sendJson(response, 200, await discover(body));
+    } catch (error) {
+      const status = error.code === "TOO_LARGE" ? 413 : error.status || (error.name === "ZodError" || error instanceof SyntaxError ? 400 : 502);
+      sendJson(response, status, { error: status === 400 ? "Choose a valid recording and discovery preferences." : status === 404 ? error.message : "Couldn’t load discovery for this recording. Try again." });
+    }
     return;
   }
 

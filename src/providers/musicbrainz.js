@@ -137,7 +137,7 @@ function externalSlug(id) {
 export function normalizeMusicBrainzResult(recording) {
   const artist = primaryArtist(recording["artist-credit"]);
   const release = firstRelease(recording);
-  const genres = (recording.genres || [])
+  const genres = [...(recording.genres?.length ? recording.genres : recording.tags || [])]
     .sort((left, right) => (right.count || 0) - (left.count || 0))
     .slice(0, 3)
     .map((genre) => genre.name);
@@ -153,7 +153,7 @@ export function normalizeMusicBrainzResult(recording) {
     album: release?.title || "Release unknown",
     releaseMusicBrainzId: release?.id || null,
     releaseStatus: release?.status || null,
-    releaseDate: release?.date || recording["first-release-date"] || null,
+    releaseDate: recording["first-release-date"] || release?.date || null,
     version: recording.disambiguation || "MusicBrainz recording",
     genres,
     duration: formatDuration(recording.length),

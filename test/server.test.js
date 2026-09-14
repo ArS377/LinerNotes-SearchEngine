@@ -12,6 +12,19 @@ import {
 
 let baseUrl;
 
+test("track discovery validates input and resolves canonical songs", async () => {
+  const invalid = await fetch(`${baseUrl}/api/v1/discover`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seedSlug: "https://example.com" }) });
+  assert.equal(invalid.status, 400);
+  const missing = await fetch(`${baseUrl}/api/v1/discover`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seedSlug: "does-not-exist" }) });
+  assert.equal(missing.status, 404);
+  const response = await fetch(`${baseUrl}/api/v1/discover`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seedSlug: "love-story-taylor-swift", differentArtists: false, focus: "genre" }) });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.seed.title, "Love Story");
+  assert.equal(result.method, "metadata-mmr-v1");
+  assert.ok(result.items.every((item) => item.slug !== result.seed.slug && item.reasons.length));
+});
+
 before(async () => {
   setWikimediaFetchForTests(async (url) => {
     if (String(url).includes("Special:EntityData")) {
