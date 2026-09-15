@@ -1,7 +1,7 @@
 import { getRecording } from "./catalog.js";
 import { catalogSummaries } from "./music-intelligence.js";
 import { lookupAppleTrack, searchAppleMusic } from "./providers/apple.js";
-import { lookupMusicBrainzRecording, searchMusicBrainz, lookupMusicBrainzArtistMetadata, searchMusicBrainzArtists } from "./providers/musicbrainz.js";
+import { lookupMusicBrainzRecording, searchMusicBrainz, lookupMusicBrainzArtistMetadata, searchMusicBrainzArtists, searchMusicBrainzAlbums, lookupMusicBrainzAlbumGenres } from "./providers/musicbrainz.js";
 import { cached } from "./services/cache.js";
 import { discoveryRequestSchema } from "./contracts/discovery.js";
 import { genreNames as genresOf, normalizeGenre as normalize, researchGenres, supportedGenres } from "./genre-research.js";
@@ -21,6 +21,8 @@ export async function enrichSeedGenres(seed, dependencies = {}) {
   const findArtists = dependencies.findArtists || searchMusicBrainzArtists;
   const artistMetadata = dependencies.artistMetadata || lookupMusicBrainzArtistMetadata;
   const research = dependencies.research || researchGenres;
+  const findAlbums = dependencies.findAlbums || (!dependencies.search ? searchMusicBrainzAlbums : null);
+  const albumMetadata = dependencies.albumMetadata || lookupMusicBrainzAlbumGenres;
   let recording = { ...seed };
   let artist = null;
   let artistId = seed.artistMusicBrainzId;
@@ -32,6 +34,15 @@ export async function enrichSeedGenres(seed, dependencies = {}) {
       recording = { ...recording, genres: [...new Set([...genresOf(seed), ...genresOf(match)])], genreVotes: match.genreVotes };
     }
   } catch { /* Artist lookup can still supply explicitly labeled fallback evidence. */ }
+  if (seed.album && findAlbums) {
+    try {
+      const albums = (await findAlbums(`releasegroup:${quote(seed.album)} AND artist:${quote(seed.artist)}`, 5)).filter((album) => normalize(album.title) === normalize(seed.album) && normalize(album.artist) === normalize(seed.artist));
+      if (albums.length === 1) {
+        const album = await albumMetadata(albums[0].id);
+        if (normalize(album.title) === normalize(seed.album) && normalize(album.artist) === normalize(seed.artist)) recording.albumGenreEvidence = album;
+      }
+    } catch { recording.genreEnrichmentIncomplete = true; }
+  }
   try {
     if (!artistId) {
       const matches = (await findArtists(`artist:${quote(seed.artist)}`, 5)).filter((item) => normalize(item.name) === normalize(seed.artist));
@@ -43,8 +54,13 @@ export async function enrichSeedGenres(seed, dependencies = {}) {
     }
   } catch { /* Keep broad metadata, but don't claim strong similarity from it. */ }
   const genreResearch = await research(recording, artist);
+  if (recording.genreEnrichmentIncomplete) {
+    genreResearch.selected = [];
+    genreResearch.status = "partial";
+  }
   const usesArtist = genreResearch.entries.some((entry) => genreResearch.selected.includes(entry.name) && entry.level === "artist");
-  return { ...recording, genres: [...new Set([...genresOf(recording), ...genresOf(artist || {})])], genreResearch, genreContext: usesArtist ? { level: "artist", name: artist.name, url: `https://musicbrainz.org/artist/${artistId}` } : { level: "recording" } };
+  const usesAlbum = genreResearch.entries.some((entry) => genreResearch.selected.includes(entry.name) && entry.level === "album");
+  return { ...recording, genres: [...new Set([...genresOf(recording), ...genresOf(recording.albumGenreEvidence || {}), ...genresOf(artist || {})])], genreResearch, genreContext: usesArtist ? { level: "artist", name: artist.name, url: `https://musicbrainz.org/artist/${artistId}` } : usesAlbum ? { level: "album", name: seed.album, url: `https://musicbrainz.org/release-group/${recording.albumGenreEvidence.id}` } : { level: "recording" } };
 }
 
 function summary(data, slug) {
@@ -96,6 +112,7 @@ export function rankCandidates(seed, candidates, options) {
     const reasons = [];
     if (shared.length) reasons.push(`Shares ${new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(shared)} catalog tags with ${seed.title}.`);
     if (shared.length && seed.genreContext?.level === "artist") reasons[0] = `Tagged ${shared.join(", ")} in MusicBrainz, matching ${seed.artist}’s artist-level genre profile. This is not a verified sound match for ${seed.title}.`;
+    if (shared.length && seed.genreContext?.level === "album") reasons[0] = `Tagged ${shared.join(", ")} in MusicBrainz, matching the album ${seed.album}. Album genres are context, not a verified sound match.`;
     if (shared.length && item.genreContext?.level === "artist") reasons[0] = `${item.artist} and ${seed.artist} have ${shared.join(", ")} genre context in MusicBrainz. This pick uses artist metadata, not a verified sound match between these songs.`;
     if (gap !== null && selectedWeights.era > 0) reasons.push(`Catalog release year: ${itemYear}, ${gap === 0 ? "the same year as" : `${gap} year${gap === 1 ? "" : "s"} from`} your starting track (${seedYear}).`);
     if (options.unfamiliarArtists) reasons.push("This artist is not in your current bookmarks.");

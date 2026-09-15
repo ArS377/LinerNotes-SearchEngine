@@ -43,3 +43,9 @@ test("a rare weakly supported artist tag cannot override the principal style", a
   const result = await research({ genres: [] }, { genres: ["shoegaze", "c86"], genreVotes: { shoegaze: 30, c86: 1 } }, { shoegaze: 8000, c86: 38 });
   assert.deepEqual(result.selected, ["shoegaze"]);
 });
+
+test("album genres prevent career-wide artist styles from leaking into a different album", async () => {
+  const result = await research({ genres: ["pop"], albumGenreEvidence: { genres: ["indie folk", "chamber pop"] } }, { genres: ["country pop"] }, { pop: 500000, "indie folk": 2000, "chamber pop": 1000, "country pop": 100 });
+  assert.deepEqual(new Set(result.selected), new Set(["indie folk", "chamber pop"]));
+  assert.ok(result.entries.every((entry) => entry.level !== "artist"));
+});

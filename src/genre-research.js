@@ -23,24 +23,28 @@ export async function researchGenres(recording, artist = null, dependencies = {}
   try { catalog = new Map((await getCatalog()).map((name) => [normalizeGenre(name), name])); }
   catch { return base; }
   const trackNames = supportedGenres(recording).filter((name) => catalog.has(name));
+  const album = recording.albumGenreEvidence || {};
+  const albumNames = supportedGenres(album).filter((name) => catalog.has(name));
   const artistNames = supportedGenres(artist || {}).filter((name) => catalog.has(name));
   const supportOf = (item, name) => {
     const votes = new Map(Object.entries(item.genreVotes || {}).map(([label, value]) => [normalizeGenre(label), value]));
     const max = Math.max(0, ...votes.values());
     return max ? (votes.get(name) || 0) / max : 1;
   };
-  const names = [...new Set([...trackNames, ...artistNames])].slice(0, 12);
+  const names = [...new Set([...trackNames, ...albumNames, ...(albumNames.length ? [] : artistNames)])].slice(0, 12);
   const entries = [];
   let failed = 0;
   for (const name of names) {
     try {
       const recordingCount = await count(catalog.get(name));
       if (!Number.isFinite(recordingCount) || recordingCount < 0) throw new Error("Invalid prevalence");
-      const level = trackNames.includes(name) ? "recording" : "artist";
-      entries.push({ name, catalogName: catalog.get(name), recordingCount, support: supportOf(level === "recording" ? recording : artist, name), level, url: `https://musicbrainz.org/search?query=${encodeURIComponent(`tag:${quoteGenre(catalog.get(name))} AND status:official`)}&type=recording&method=advanced` });
+      const level = trackNames.includes(name) ? "recording" : albumNames.includes(name) ? "album" : "artist";
+      entries.push({ name, catalogName: catalog.get(name), recordingCount, support: supportOf(level === "recording" ? recording : level === "album" ? album : artist, name), level, url: `https://musicbrainz.org/search?query=${encodeURIComponent(`tag:${quoteGenre(catalog.get(name))} AND status:official`)}&type=recording&method=advanced` });
     } catch { failed++; }
   }
-  const supported = entries.filter((entry) => entry.recordingCount > 0);
+  // Album evidence is closer to the song than an artist's career-wide genres.
+  const hasAlbum = entries.some((entry) => albumNames.includes(entry.name) && entry.recordingCount > 0);
+  const supported = entries.filter((entry) => entry.recordingCount > 0 && (!hasAlbum || entry.level !== "artist"));
   const largest = Math.max(0, ...supported.map((entry) => entry.recordingCount));
   for (const entry of supported) entry.specificityScore = entry.support * Math.max(0.1, Math.log((largest + 1) / (entry.recordingCount + 1)));
   // Rarity is a corpus signal, not a hand-authored hierarchy or a sound claim.
@@ -48,6 +52,7 @@ export async function researchGenres(recording, artist = null, dependencies = {}
   const strongest = Math.max(0, ...supported.map((entry) => entry.specificityScore));
   const narrow = supported.filter((entry) => entry.specificityScore >= strongest / 2);
   const tracks = narrow.filter((entry) => entry.level === "recording");
-  const selected = failed ? [] : (tracks.length ? tracks : narrow).sort((a, b) => b.specificityScore - a.specificityScore || a.name.localeCompare(b.name)).slice(0, 3).map((entry) => entry.name);
+  const albums = narrow.filter((entry) => entry.level === "album");
+  const selected = failed ? [] : (tracks.length ? tracks : albums.length ? albums : narrow).sort((a, b) => b.specificityScore - a.specificityScore || a.name.localeCompare(b.name)).slice(0, 3).map((entry) => entry.name);
   return { ...base, catalogSize: catalog.size, entries, selected, status: failed ? "partial" : supported.length ? "ok" : "insufficient-metadata" };
 }

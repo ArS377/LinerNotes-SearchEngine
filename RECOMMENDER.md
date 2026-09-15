@@ -1,142 +1,127 @@
 # Track discovery recommender
 
-The implemented system is a metadata-based baseline for listener-controlled
-discovery. It does not analyze sound or claim to match production, vocals or energy.
+## What is implemented
 
-## User flow
+`catalog-research-mmr-v3` uses provider metadata, not audio analysis. There are no
+artist recommendation maps, genre-name tiers, broad-genre blocklists, or manually
+assigned subgenre relationships in the recommendation algorithm. Numeric limits
+and ranking weights remain explicit engineering parameters, not learned values.
+Named artists and genres in test/evaluation fixtures are not production rules.
 
-Choose **Find similar** on a song or result, select genre/era priorities and artist
-filters, then preview, bookmark, dismiss or follow a recommendation. Following a
-recording adds an edge and its explanation to a trail. Trails can be saved in the
-browser or copied as links. Links contain public track metadata and focus controls,
-not the listener's bookmarks, excluded tracks or unfamiliar-artist filter. A localhost
-link is usable only on the same computer until the application is deployed.
+## Genre catalog and on-demand research
 
-## Implementation
+`src/genre-research.js` loads the complete MusicBrainz genre vocabulary using
+`/ws/2/genre/all?fmt=txt`. The documented text format is unpaginated. The catalog
+is cached for a day with a one-week stale fallback. Unicode-aware normalization
+handles punctuation and case without removing non-Latin names. Store labels that
+do not match the official vocabulary are not guessed into a genre or alias.
 
-- `src/discovery.js`: canonical seed resolution, candidate retrieval, ranking,
-  diversity reranking, evidence and conservative preview matching.
-- `src/contracts/discovery.js`: Zod request and trail validation, shared with the UI.
-- `POST /api/v1/discover`: bounded JSON, validated options, per-client rate limit,
-  explicit provider failures and missing-recording errors.
-- `web/Discovery.tsx`: React + TanStack Query preference controls and result states.
-- `web/discovery-trails.ts`: validated trail URLs and localStorage persistence.
+Seed resolution looks for an exact normalized title/artist match in MusicBrainz.
+It also searches release groups by the seed's album title and artist, accepts only
+one exact match, and loads that album's genres. Album evidence takes priority over
+career-wide artist genres; ambiguous releases are not guessed. Evidence explicitly
+distinguishes recording, album and artist context.
+Artist metadata is fetched via that recording's artist ID, or a unique exact-name
+artist result. Ambiguous artists are not merged. Up to twelve validated genres
+from the recording and album (or artist if album evidence is unavailable) are researched using bounded recording searches:
+`tag:"<provider genre>" AND status:official`, limit 1. The returned total is the
+catalog prevalence estimate; counts are cached daily with stale fallback.
 
-No new packages, paid model API, vector database or account are required. Existing
-MusicBrainz and Apple adapters provide catalog data; the existing cache provides
-request coalescing and memory/optional Redis caching. Seed lookup accepts identifiers,
-not arbitrary remote URLs.
+Ignore genre votes below one third of the strongest provider vote count when
+votes are available. For positive-support genres, compute
+`supportFraction * max(0.1, log((largestCount + 1)/(genreCount + 1)))`.
+Keep genres with at least half the strongest score, preferring recording-level
+evidence within that set over artist-level evidence. Select at most three genres.
+This combines tagging support with rarity, rather than letting an obscure weak
+artist tag override its principal style. It gives rarer descriptors influence without encoding
+that one named genre is more specific than another. For example, a new genre
+added by MusicBrainz is usable without a code change.
 
-## Candidate retrieval
+IMPORTANT: lower catalog frequency is only a specificity heuristic. It does not
+establish a semantic parent/child hierarchy, a musical scene, or audible similarity.
+Community tagging coverage is uneven and search totals are estimates. Research is
+structured catalog querying, not unsupervised web scraping or an LLM inventing
+genre facts. Missing counts remain unknown; partial research abstains rather than
+silently selecting a broader remaining genre. Zero-count tags do not win by rarity.
 
-Resolve a local, MusicBrainz or Apple recording on the server. Supplement broad
-store categories with exact normalized title/artist matches in MusicBrainz. If no
-specific recording genres are found, use an unambiguous matching artist's genre
-profile. Preserve artist-level provenance in `genreContext`; this is a fallback,
-not proof about the sound of every song by that artist.
+The seed's `genreResearch` includes catalog size, research timestamp, status,
+selected genres, counts, evidence level and reproducible search URLs. Each result's
+evidence includes the matching research entries. Artist-level fallback is identified
+in the explanation; it is not presented as a verified tag on the song itself.
 
-Select the most specific genre tier: explicit microgenres (rage rap, drill, plugg,
-pluggnb, boom bap, g-funk) before trap/cloud rap/regional hip hop, other specific
-genres, then umbrella categories. Normalize rage/rage rap and trap/trap music.
-Search up to 100 recordings using at most three selected genres. For specific rap
-subgenres, also search up to ten tagged artists and fetch up to twenty recordings
-from each of at most four matching artists. Exact artist credits are required;
-conflicting recording subgenres are not overwritten. Added artist evidence includes
-only genres shared with the seed, not unrelated free-form artist tags.
+## Retrieval and ranking
 
-Merge with local candidates, respecting filters and deduplication. No artist names
-or recommended songs are hardcoded. MusicBrainz searches remain rate-limited,
-cached and bounded; transient HTTP 503 receives one queued retry. Recording search
-retains twelve tags instead of three, so sparse subgenre evidence is less likely
-to be truncated. Broad-only metadata produces an insufficient-metadata response
-in balanced/genre modes, not a generic hip-hop/pop/rock recommendation list.
+Search up to 100 recordings for the selected genres. For every genre family, also
+search up to ten matching artists and fetch twenty recordings from each of at most
+four eligible artists. No rap-specific branch exists. Artist-inferred candidate
+genres cannot overwrite conflicting track tags. Broader tags are identified only
+when the same research shows their count is more than four times the selected
+genres' counts; unknown tags are not assumed broad. Related candidates keep only
+artist genres shared with the seed. Existing local catalog entries join the pool.
 
-MusicBrainz tags are preserved when a search response has no separate genres field.
-Prefer the recording's first-release-date over an associated release's date. Even
-that date may reflect incomplete catalog history, so explanations say catalog year.
+Balanced and genre modes require a researched genre match. Era mode remains an
+explicit alternative: it can accept a track within five years without a genre
+match. Do not interpret era mode as a sound-similarity mode.
 
-## Ranking
-
-Normalize genre punctuation and aliases. Let S be the selected specific seed genres,
-A all seed genres and B all candidate genres. Score:
+For selected seed genres S, all seed genres A and candidate genres B:
 
 `genre = 0.8 * |S intersection B| / |S| + 0.2 * Jaccard(A, B)`
 
-Matching the specific subgenre dominates; extra descriptive tags should not demote
-a well-described rage track below a sparsely tagged recording.
-
-For known release years, compute exponential proximity:
-
 `era = exp(-abs(seedYear - candidateYear) / 12)`
 
-Missing dates score zero and are not described as a year match. These starting
-weights are hand-tuned and are not learned from user data:
+Missing dates contribute zero. Balanced weights are 0.75 genre/0.25 era; genre mode
+is 1/0; era mode is 0.25/0.75. These weights are hand-tuned, not trained.
+Artist and album diversity use the existing MMR reranker:
+`0.75 * relevance - 0.25 * maximum redundancy`.
 
-| Focus | Genre weight | Era weight |
-| --- | ---: | ---: |
-| Balanced | 0.75 | 0.25 |
-| Genre | 1.00 | 0.00 |
-| Era | 0.25 | 0.75 |
+Seed, duplicates, dismissed/bookmarked recordings and excluded artists are filtered.
+Preview/artwork enrichment requires an exact normalized title AND artist match.
+MusicBrainz calls use the shared rate limiter; HTTP 503 is retried once, not forever.
+The first uncached discovery can be slow due to bounded sequential provider queries.
+Provider outages can produce fewer or no results. No generic genre list is silently
+substituted when research fails. API input validation and rate limiting are unchanged.
 
-Balanced and genre modes require a shared selected non-umbrella genre. Era mode also permits a
-candidate within five years without shared tags, and requires a known date. Do not
-pad results with unrelated recordings to reach the requested count.
+## Tests and live evaluation
 
-Exclude the seed, exact normalized title/artist duplicates, dismissed identifiers,
-equivalent dismissed entries present in the candidate pool, and bookmarked tracks.
-The two artist controls independently exclude the seed artist and artists represented
-in the current bookmarks. Matching artist names is conservative, not a complete
-cross-platform identity graph; aliases and collaborative credits can evade it.
+Run `npm test`, `npm run typecheck`, and `npm run lint`.
+Genre research fixtures cover rap, rock/shoegaze, electronic, jazz, country, metal,
+pop, folk, classical, reggae, soul, previously unknown provider genres, non-Latin
+labels, conflicting artist styles, non-genre tags and provider outages.
 
-## Diversity and explanations
+Run `node scripts/evaluate-discovery.js` for live cross-genre catalog checks. Its
+eight named seed tracks are evaluation fixtures only. It prints JSON lines with
+selected genres, evidence/counts, recommendations, latency and failures. It does
+not listen to audio or establish subjective relevance. A human-rated dataset is
+still needed before claiming quality across every artist and every genre.
 
-Greedily choose the next track using an MMR-style objective:
+Discovery controls, previews, bookmarks and saved/shareable trails are unchanged.
+No new paid API, model, dependency or vector database is required. Future audio
+similarity requires appropriately licensed audio, embeddings and listener testing.
 
-`0.75 * relevance - 0.25 * maximum_redundancy_with_selected_tracks`
+## Sources
 
-Redundancy is the larger of the same-artist penalty (0.85) and same-known-album penalty
-(0.80), plus 0.15 times genre overlap. This favors varied artists and releases while
-preserving relevance. It is a soft penalty, not a guarantee of unique artists.
+### Live evaluation notes — 2026-09-15
 
-Reasons are assembled from actual shared tags, known dates and the bookmark filter.
-The response includes source links and score components. Scores are ranking signals,
-not calibrated probabilities or predictions of listener satisfaction. No LLM writes
-these explanations.
+Eight seed cases were exercised, with repeated runs during intermittent MusicBrainz
+503 errors. This is not eight successful quality evaluations. The initial rarity-only
+version exposed weak-tag drift (C86 for My Bloody Valentine) and artist-history drift
+(country pop for cardigan). Those observations led to vote support and album-context
+enrichment, with deterministic regression tests for both failure modes.
 
-Search Apple for previews only for the selected results. Attach media only when the
-normalized title AND artist match; otherwise leave the preview unavailable. This
-conservative rule can miss legitimate collaborations, but avoids first-result audio
-substitution. It does not establish an ISRC-level recording match.
+The support-weighted run selected rage for Green Room, thrash metal for Metallica,
+and roots reggae for Bob Marley. Metallica returned five tagged recommendations
+including Anthrax; several other cases could not retrieve candidates or complete
+genre research because of provider failures. Jolene's bluegrass fallback was
+artist-level context, not verification of the song's subgenre or a listener-quality
+pass. The album-aware cardigan rerun found folklore's indie folk/chamber pop/folk pop
+evidence but incomplete prevalence requests correctly produced no recommendations.
+Album lookup exceptions now also abstain instead of substituting career-wide tags.
 
-## Tests and evaluation
+Outstanding: reliable provider coverage, faster cold lookups, artist-credit identity
+edge cases, and listener judgments across a much larger set. No claim is made that
+all artists or all genres have been evaluated, or that all eight live cases passed.
 
-Automated tests cover ranking changes, artist filters, deduplication, dismissals,
-artist/album diversity, missing evidence, outages, bounded requests, API behavior and
-trail serialization. These establish correctness, not recommendation quality.
+### API references
 
-Next, create a fixed set of seed tracks spanning scenes and have listeners judge five
-recommendations per seed. Compare this baseline against genre-only and random-within-
-genre retrieval using save/open rate, relevant picks at five, artist diversity and
-preview coverage. Do not change weights based only on whether unit tests pass.
-
-Current limitations include bounded retrieval (up to 180 remote candidates), sparse community tags,
-incomplete dates, limited preview coverage, and no popularity or listening-history
-model. "Outside my bookmarks" does not mean obscure or never heard before. Shared
-trails preserve the selected path; the recommendations at each node can change.
-
-## Audio-aware next stage (not implemented)
-
-For production and vocal similarity, evaluate a music-capable CLAP checkpoint on
-audio the project is authorized to process. A Python/PyTorch batch worker would
-compute embeddings; PostgreSQL with pgvector could retrieve candidates by cosine
-similarity using HNSW, followed by the existing preference filters and MMR stage.
-General embeddings do not automatically disentangle vocals from instrumentation:
-separate controls need suitable representations and listener evaluation before launch.
-Credits-based producer/composer edges also require verified relationship data.
-
-References:
-
-- [MusicBrainz search fields](https://musicbrainz.org/doc/MusicBrainz_API/Search)
-- [MMR paper](https://doi.org/10.1145/290941.291025)
-- [CLAP](https://github.com/LAION-AI/CLAP)
-- [pgvector](https://github.com/pgvector/pgvector)
+- https://musicbrainz.org/doc/MusicBrainz_API (genre vocabulary and text endpoint)
+- https://musicbrainz.org/doc/MusicBrainz_API/Search (tag fields and search totals)

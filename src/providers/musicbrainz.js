@@ -194,6 +194,16 @@ export async function listMusicBrainzGenres() {
   return names;
 }
 
+export async function searchMusicBrainzAlbums(query, limit = 5) {
+  const body = await requestMusicBrainz("release-group", { query, limit: String(limit) });
+  return (body["release-groups"] || []).map((album) => ({ id: album.id, title: album.title, artist: artistCreditText(album["artist-credit"]) }));
+}
+
+export async function lookupMusicBrainzAlbumGenres(id) {
+  const album = await requestMusicBrainz(`release-group/${encodeURIComponent(id)}`, { inc: "genres+artist-credits" });
+  return { id: album.id, title: album.title, artist: artistCreditText(album["artist-credit"]), genres: (album.genres || []).map((genre) => genre.name), genreVotes: Object.fromEntries((album.genres || []).map((genre) => [genre.name, genre.count || 0])) };
+}
+
 export async function searchMusicBrainzArtists(query, limit = 10) {
   const body = await requestMusicBrainz("artist", {
     query,

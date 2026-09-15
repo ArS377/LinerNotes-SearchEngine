@@ -7,6 +7,8 @@ import {
   searchMusicBrainzArtists,
   searchMusicBrainz,
   listMusicBrainzGenres,
+  searchMusicBrainzAlbums,
+  lookupMusicBrainzAlbumGenres,
   setMusicBrainzFetchForTests
 } from "../src/providers/musicbrainz.js";
 
@@ -209,4 +211,16 @@ test("loads the complete provider genre list using the unpaginated text endpoint
     return { ok: true, text: async () => "bebop\nnew genre\n日本民謡\nbebop\n" };
   });
   assert.deepEqual(await listMusicBrainzGenres(), ["bebop", "new genre", "日本民謡"]);
+});
+
+test("album search retains the identity needed for an exact match", async () => {
+  setMusicBrainzFetchForTests(async () => ({ ok: true, json: async () => ({ "release-groups": [{ id: "album-1", title: "New Direction", "artist-credit": [{ name: "Example Artist" }] }] }) }));
+  assert.deepEqual(await searchMusicBrainzAlbums('releasegroup:"New Direction"'), [{ id: "album-1", title: "New Direction", artist: "Example Artist" }]);
+});
+
+test("album genre lookup preserves provider vote counts", async () => {
+  setMusicBrainzFetchForTests(async () => ({ ok: true, json: async () => ({ id: "album-1", title: "New Direction", "artist-credit": [{ name: "Example Artist" }], genres: [{ name: "indie folk", count: 7 }] }) }));
+  const album = await lookupMusicBrainzAlbumGenres("album-1");
+  assert.equal(album.genreVotes["indie folk"], 7);
+  assert.deepEqual(album.genres, ["indie folk"]);
 });

@@ -128,3 +128,24 @@ test("requests and shared trails reject arbitrary URLs and unbounded input", () 
   assert.equal(discoveryRequestSchema.safeParse({ seedSlug: "seed", focus: "vocals" }).success, false);
   assert.equal(trailSchema.safeParse({ version: 1, steps: Array(11).fill("seed"), focus: "genre", differentArtists: true }).success, false);
 });
+
+test("album enrichment verifies album title and artist and preserves provenance", async () => {
+  const albumSeed = { ...seed, genres: [], album: "New Direction" };
+  const enriched = await enrichSeedGenres(albumSeed, {
+    search: async () => ({ results: [] }), findArtists: async () => [],
+    findAlbums: async () => [{ id: "album-id", title: "New Direction", artist: seed.artist }],
+    albumMetadata: async () => ({ id: "album-id", title: "New Direction", artist: seed.artist, genres: ["boom bap"] }), research
+  });
+  assert.deepEqual(discoveryGenres(enriched), ["boom bap"]);
+  assert.equal(enriched.genreContext.level, "album");
+  assert.equal(enriched.genreContext.url, "https://musicbrainz.org/release-group/album-id");
+});
+
+test("album lookup outages do not silently substitute career-wide artist genres", async () => {
+  const enriched = await enrichSeedGenres({ ...seed, album: "New Direction" }, {
+    search: async () => ({ results: [] }), findArtists: async () => [],
+    findAlbums: async () => { throw new Error("unavailable"); }, research: async () => profile(["disco"])
+  });
+  assert.deepEqual(discoveryGenres(enriched), []);
+  assert.equal(enriched.genreResearch.status, "partial");
+});
