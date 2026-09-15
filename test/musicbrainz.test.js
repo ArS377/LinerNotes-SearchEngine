@@ -6,6 +6,7 @@ import {
   lookupMusicBrainzRecording,
   searchMusicBrainzArtists,
   searchMusicBrainz,
+  listMusicBrainzGenres,
   setMusicBrainzFetchForTests
 } from "../src/providers/musicbrainz.js";
 
@@ -199,4 +200,13 @@ test("persistent overload stops after one retry", async () => {
   setMusicBrainzFetchForTests(async () => { requests++; return { ok: false, status: 503 }; });
   await assert.rejects(searchMusicBrainz("still overloaded"), /503/);
   assert.equal(requests, 2);
+});
+
+test("loads the complete provider genre list using the unpaginated text endpoint", async () => {
+  setMusicBrainzFetchForTests(async (url) => {
+    assert.equal(url.pathname, "/ws/2/genre/all");
+    assert.equal(url.searchParams.get("fmt"), "txt");
+    return { ok: true, text: async () => "bebop\nnew genre\n日本民謡\nbebop\n" };
+  });
+  assert.deepEqual(await listMusicBrainzGenres(), ["bebop", "new genre", "日本民謡"]);
 });

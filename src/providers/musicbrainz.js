@@ -47,7 +47,8 @@ async function requestMusicBrainz(path, params) {
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== "") url.searchParams.set(key, value);
   }
-  url.searchParams.set("fmt", "json");
+  const format = params.fmt || "json";
+  url.searchParams.set("fmt", format);
 
   const cacheKey = url.toString();
   const cached = readCache(cacheKey);
@@ -68,7 +69,7 @@ async function requestMusicBrainz(path, params) {
         error.status = response.status;
         throw error;
       }
-      return response.json();
+      return format === "txt" ? response.text() : response.json();
     };
   const pending = withRateLimit(fetchResponse)
     .catch((error) => {
@@ -127,6 +128,7 @@ function normalizedArtistMetadata(artist) {
       .sort((left, right) => (right.count || 0) - (left.count || 0))
       .slice(0, 8)
       .map((genre) => genre.name),
+    genreVotes: Object.fromEntries((artist.genres || []).map((genre) => [genre.name, genre.count || 0])),
     urls
   };
 }
@@ -163,6 +165,7 @@ export function normalizeMusicBrainzResult(recording) {
     releaseDate: recording["first-release-date"] || release?.date || null,
     version: recording.disambiguation || "MusicBrainz recording",
     genres,
+    genreVotes: Object.fromEntries((recording.genres?.length ? recording.genres : recording.tags || []).map((genre) => [genre.name, genre.count || 0])),
     duration: formatDuration(recording.length),
     color: "#496b66",
     matchReason: "global catalog match",
@@ -183,6 +186,14 @@ export async function searchMusicBrainz(query, limit = 20, offset = 0) {
   };
 }
 
+export async function listMusicBrainzGenres() {
+  // The documented text format returns the complete list without pagination.
+  const body = await requestMusicBrainz("genre/all", { fmt: "txt" });
+  const names = [...new Set(body.split(/\r?\n/).map((name) => name.trim()).filter(Boolean))];
+  if (!names.length) throw new Error("MusicBrainz returned an empty genre catalog");
+  return names;
+}
+
 export async function searchMusicBrainzArtists(query, limit = 10) {
   const body = await requestMusicBrainz("artist", {
     query,
@@ -196,7 +207,8 @@ export async function searchMusicBrainzArtists(query, limit = 10) {
     country: artist.country || artist.area?.name || null,
     disambiguation: artist.disambiguation || null,
     score: Number(artist.score || 0),
-    genres: [...(artist.genres || []), ...(artist.tags || [])].filter((tag) => (tag.count ?? 1) > 0).map((tag) => tag.name)
+    genres: [...(artist.genres || []), ...(artist.tags || [])].filter((tag) => (tag.count ?? 1) > 0).map((tag) => tag.name),
+    genreVotes: Object.fromEntries([...(artist.genres || []), ...(artist.tags || [])].map((tag) => [tag.name, tag.count || 0]))
   }));
 }
 

@@ -21,7 +21,7 @@ test("track discovery validates input and resolves canonical songs", async () =>
   assert.equal(response.status, 200);
   const result = await response.json();
   assert.equal(result.seed.title, "Love Story");
-  assert.equal(result.method, "subgenre-mmr-v2");
+  assert.equal(result.method, "catalog-research-mmr-v3");
   assert.ok(result.items.every((item) => item.slug !== result.seed.slug && item.reasons.length));
 });
 

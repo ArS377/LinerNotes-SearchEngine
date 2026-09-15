@@ -1,56 +1,50 @@
 import { getRecording } from "./catalog.js";
 import { catalogSummaries } from "./music-intelligence.js";
-import { normalize } from "./search.js";
 import { lookupAppleTrack, searchAppleMusic } from "./providers/apple.js";
 import { lookupMusicBrainzRecording, searchMusicBrainz, lookupMusicBrainzArtistMetadata, searchMusicBrainzArtists } from "./providers/musicbrainz.js";
 import { cached } from "./services/cache.js";
 import { discoveryRequestSchema } from "./contracts/discovery.js";
+import { genreNames as genresOf, normalizeGenre as normalize, researchGenres, supportedGenres } from "./genre-research.js";
 
 const weights = { balanced: { genre: 0.75, era: 0.25 }, genre: { genre: 1, era: 0 }, era: { genre: 0.25, era: 0.75 } };
-const genreAliases = { "hip hop rap": "hip hop", "hiphop": "hip hop", "rap": "hip hop", "rage": "rage rap", "trap music": "trap", "r b soul": "r b", "rhythm and blues": "r b" };
-const cleanGenre = (value) => genreAliases[normalize(value)] || normalize(value);
-const genresOf = (item) => [...new Set((item.genres || []).filter((g) => typeof g === "string").map(cleanGenre).filter(Boolean))];
 const yearOf = (item) => { const year = Number.parseInt(item.releaseDate, 10); return year >= 1850 && year <= new Date().getUTCFullYear() + 1 ? year : null; };
 const identity = (item) => `${normalize(item.artist)}::${normalize(item.title).replace(/\b(remaster(ed)?|\d{4} remaster(ed)?)\b/g, "").trim()}`;
 const quote = (value) => `"${String(value).replace(/[\\"]/g, " ").slice(0, 150)}"`;
 const overlap = (a, b) => a.filter((value) => b.includes(value));
 const jaccard = (a, b) => { const union = new Set([...a, ...b]); return union.size ? overlap(a, b).length / union.size : 0; };
-const broadGenres = new Set(["hip hop", "pop", "rock", "electronic", "dance", "r b", "alternative", "music"]);
-// Explicit specificity tiers, not popularity or artist-name exceptions.
-const specificity = (genre) => ["rage rap", "pluggnb", "plugg", "drill", "uk drill", "chicago drill", "boom bap", "g funk"].includes(genre) ? 3 : ["trap", "cloud rap", "southern hip hop"].includes(genre) ? 2 : broadGenres.has(genre) ? 0 : 1;
 export function discoveryGenres(item) {
-  const genres = genresOf(item);
-  const tier = Math.max(0, ...genres.map(specificity));
-  return genres.filter((genre) => specificity(genre) === tier);
+  return item.genreResearch?.selected || [];
 }
 
 export async function enrichSeedGenres(seed, dependencies = {}) {
   const search = dependencies.search || searchMusicBrainz;
   const findArtists = dependencies.findArtists || searchMusicBrainzArtists;
   const artistMetadata = dependencies.artistMetadata || lookupMusicBrainzArtistMetadata;
-  let enriched = { ...seed };
+  const research = dependencies.research || researchGenres;
+  let recording = { ...seed };
+  let artist = null;
   let artistId = seed.artistMusicBrainzId;
   try {
     const payload = await search(`recording:${quote(seed.title)} AND artist:${quote(seed.artist)}`, 5);
     const match = payload.results.find((item) => normalize(item.title) === normalize(seed.title) && normalize(item.artist) === normalize(seed.artist));
     if (match) {
       artistId = match.artistMusicBrainzId || artistId;
-      enriched = { ...enriched, genres: [...new Set([...genresOf(seed), ...genresOf(match)])] };
+      recording = { ...recording, genres: [...new Set([...genresOf(seed), ...genresOf(match)])], genreVotes: match.genreVotes };
     }
   } catch { /* Artist lookup can still supply explicitly labeled fallback evidence. */ }
-  // Track-specific subgenres take precedence over an artist's entire discography.
-  if (discoveryGenres(enriched).some((genre) => specificity(genre) > 0)) return enriched;
   try {
     if (!artistId) {
       const matches = (await findArtists(`artist:${quote(seed.artist)}`, 5)).filter((item) => normalize(item.name) === normalize(seed.artist));
       if (matches.length === 1) artistId = matches[0].id;
     }
     if (artistId) {
-      const artist = await artistMetadata(artistId);
-      if (normalize(artist.name) === normalize(seed.artist)) enriched = { ...enriched, genres: [...new Set([...genresOf(enriched), ...genresOf(artist)])], genreContext: { level: "artist", name: artist.name, url: `https://musicbrainz.org/artist/${artistId}` } };
+      const match = await artistMetadata(artistId);
+      if (normalize(match.name) === normalize(seed.artist)) artist = match;
     }
   } catch { /* Keep broad metadata, but don't claim strong similarity from it. */ }
-  return enriched;
+  const genreResearch = await research(recording, artist);
+  const usesArtist = genreResearch.entries.some((entry) => genreResearch.selected.includes(entry.name) && entry.level === "artist");
+  return { ...recording, genres: [...new Set([...genresOf(recording), ...genresOf(artist || {})])], genreResearch, genreContext: usesArtist ? { level: "artist", name: artist.name, url: `https://musicbrainz.org/artist/${artistId}` } : { level: "recording" } };
 }
 
 function summary(data, slug) {
@@ -77,7 +71,7 @@ export async function resolveSeed(slug) {
 export function rankCandidates(seed, candidates, options) {
   const selectedWeights = weights[options.focus] || weights.balanced;
   const seedGenres = discoveryGenres(seed), seedYear = yearOf(seed);
-  const specificSeed = seedGenres.some((genre) => specificity(genre) > 0);
+  const specificSeed = seedGenres.length > 0;
   const excluded = new Set([seed.slug, ...(options.excludeSlugs || [])]);
   const excludedIdentities = new Set(candidates.filter((item) => excluded.has(item.slug)).map(identity));
   const knownArtists = new Set((options.knownArtists || []).map(normalize));
@@ -105,7 +99,7 @@ export function rankCandidates(seed, candidates, options) {
     if (shared.length && item.genreContext?.level === "artist") reasons[0] = `${item.artist} and ${seed.artist} have ${shared.join(", ")} genre context in MusicBrainz. This pick uses artist metadata, not a verified sound match between these songs.`;
     if (gap !== null && selectedWeights.era > 0) reasons.push(`Catalog release year: ${itemYear}, ${gap === 0 ? "the same year as" : `${gap} year${gap === 1 ? "" : "s"} from`} your starting track (${seedYear}).`);
     if (options.unfamiliarArtists) reasons.push("This artist is not in your current bookmarks.");
-    const evidence = { genres: shared, seedGenreContext: seed.genreContext || { level: "recording" }, candidateGenreContext: item.genreContext || { level: "recording" }, seedYear, candidateYear: itemYear, source: item.source || "Liner Notes", url: item.musicBrainzId ? `https://musicbrainz.org/recording/${item.musicBrainzId}` : item.appleMusicUrl || null };
+    const evidence = { genres: shared, genreResearch: seed.genreResearch?.entries.filter((entry) => shared.includes(entry.name)), seedGenreContext: seed.genreContext || { level: "recording" }, candidateGenreContext: item.genreContext || { level: "recording" }, seedYear, candidateYear: itemYear, source: item.source || "Liner Notes", url: item.musicBrainzId ? `https://musicbrainz.org/recording/${item.musicBrainzId}` : item.appleMusicUrl || null };
     pool.push({ ...item, reasons, evidence, score: Number(score.toFixed(4)), components: { genre: Number(genreScore.toFixed(4)), era: Number(eraScore.toFixed(4)) } });
   }
   pool.sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug));
@@ -131,8 +125,8 @@ export async function retrieveCandidates(seed, options, dependencies = {}) {
   const search = dependencies.search || searchMusicBrainz;
   const local = dependencies.local || catalogSummaries();
   const seedGenres = discoveryGenres(seed).slice(0, 3);
-  if (options.focus !== "era" && !seedGenres.some((genre) => specificity(genre) > 0)) return { candidates: [], providerStatus: "insufficient-metadata" };
-  const queryParts = seedGenres.flatMap((genre) => genre === "rage rap" ? ["rage", "rage rap"] : [genre]).map((genre) => `tag:${quote(genre)}`);
+  if (options.focus !== "era" && !seedGenres.length) return { candidates: [], providerStatus: seed.genreResearch?.status === "unavailable" ? "unavailable" : "insufficient-metadata" };
+  const queryParts = seedGenres.map((genre) => `tag:${quote(genre)}`);
   if (!options.differentArtists) queryParts.push(`artist:${quote(seed.artist)}`);
   if (!queryParts.length && options.focus === "era" && yearOf(seed)) queryParts.push(`firstreleasedate:[${yearOf(seed) - 3} TO ${yearOf(seed) + 3}]`);
   if (!queryParts.length) return { candidates: local, providerStatus: "insufficient-metadata" };
@@ -143,17 +137,19 @@ export async function retrieveCandidates(seed, options, dependencies = {}) {
     const related = [];
     // Artist tags cover catalogs whose individual recordings are not tagged yet.
     const findArtists = dependencies.findArtists || (!dependencies.search ? searchMusicBrainzArtists : null);
-    if (findArtists && seedGenres.some((genre) => specificity(genre) >= 2)) {
+    if (findArtists && seedGenres.length) {
       try {
         const artists = await findArtists(queryParts.filter((part) => part.startsWith("tag:")).join(" OR "), 10);
-        for (const artist of artists.filter((artist) => overlap(seedGenres, genresOf(artist)).length && (!options.differentArtists || normalize(artist.name) !== normalize(seed.artist))).slice(0, 4)) {
+        for (const artist of artists.filter((artist) => overlap(seedGenres, supportedGenres(artist)).length && (!options.differentArtists || normalize(artist.name) !== normalize(seed.artist))).slice(0, 4)) {
           try {
             const tracks = await search(`arid:${quote(artist.id)} AND status:official`, 20);
             for (const track of tracks.results) {
               if (normalize(track.artist) !== normalize(artist.name)) continue;
-              const own = discoveryGenres(track);
+              const own = genresOf(track);
               // Never overwrite a conflicting recording-level subgenre.
-              if (own.some((genre) => specificity(genre) >= 2) && !overlap(seedGenres, own).length) continue;
+              const selectedCounts = seed.genreResearch.entries.filter((entry) => seedGenres.includes(entry.name)).map((entry) => entry.recordingCount);
+              const broaderOnly = own.every((name) => seed.genreResearch.entries.some((entry) => entry.name === name && entry.recordingCount > Math.max(...selectedCounts) * 4));
+              if (own.length && !overlap(seedGenres, own).length && !broaderOnly) continue;
               related.push({ ...track, genres: [...new Set([...genresOf(track), ...overlap(genresOf(artist), genresOf(seed))])], genreContext: { level: "artist", name: artist.name, url: `https://musicbrainz.org/artist/${artist.id}` } });
             }
           } catch { /* A missing artist catalog must not discard other candidates. */ }
@@ -181,12 +177,12 @@ export async function discover(rawOptions, dependencies = {}) {
   const options = discoveryRequestSchema.parse(rawOptions);
   const seed = await (dependencies.resolveSeed || resolveSeed)(options.seedSlug);
   const load = () => retrieveCandidates(seed, options, dependencies);
-  const retrieval = dependencies.search ? await load() : await cached(`discovery:v2:${seed.slug}:${seed.genres.join(",")}:${options.differentArtists}:${options.focus === "era"}`, load, { ttlSeconds: 300 });
+  const retrieval = dependencies.search ? await load() : await cached(`discovery:v3:${seed.slug}:${discoveryGenres(seed).join(",")}:${options.differentArtists}:${options.focus === "era"}`, load, { ttlSeconds: 300 });
   const ranked = rankCandidates(seed, retrieval.candidates, options);
   const items = await Promise.all(ranked.map(dependencies.enrich || enrichPreview));
   return {
     seed, items, providerStatus: retrieval.providerStatus,
-    method: "subgenre-mmr-v2", weights: weights[options.focus],
+    method: "catalog-research-mmr-v3", weights: weights[options.focus],
     candidateCount: retrieval.candidates.length,
     limitations: ["Matches use catalog tags and release dates, not audio similarity.", "Catalog dates can refer to reissues; they are not verified recording dates.", ...(retrieval.providerStatus === "unavailable" ? ["MusicBrainz is unavailable; only the local catalog was searched."] : []), ...(items.length < options.limit ? ["There are fewer matching recordings than requested. Try another focus or allow the same artist."] : [])]
   };
