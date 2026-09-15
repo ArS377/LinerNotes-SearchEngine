@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rankCandidates, retrieveCandidates, discover } from "../src/discovery.js";
+import { rankCandidates, retrieveCandidates, discover, enrichSeedGenres, discoveryGenres } from "../src/discovery.js";
 import { discoveryRequestSchema, trailSchema } from "../src/contracts/discovery.js";
 
 const seed = { slug: "seed", title: "Starting track", artist: "Seed Artist", genres: ["disco", "funk"], releaseDate: "2013-01-01" };
@@ -47,7 +47,7 @@ test("unrelated tracks do not fill a short recommendation list", () => {
   assert.equal(rankCandidates({ ...seed, genres: [] }, [candidate("x")], options).length, 0);
 });
 test("genre aliases normalize provider vocabulary", () => {
-  assert.equal(rankCandidates({ ...seed, genres: ["Hip-Hop/Rap"] }, [candidate("rap", { genres: ["hip hop"] })], options).length, 1);
+  assert.equal(rankCandidates({ ...seed, genres: ["rage"] }, [candidate("rap", { genres: ["rage rap"] })], options).length, 1);
 });
 test("provider failure retains local candidates and reports degradation", async () => {
   const result = await retrieveCandidates(seed, options, { search: async () => { throw new Error("offline"); }, local: [candidate("local")] });
@@ -63,10 +63,52 @@ test("retrieval uses bounded tag queries, not title search disguised as recommen
 });
 test("discovery returns explanations and a canonical seed using injected providers", async () => {
   const result = await discover({ seedSlug: "seed" }, { resolveSeed: async () => seed, local: [], search: async () => ({ results: [candidate("one")] }), enrich: async (item) => item });
-  assert.equal(result.method, "metadata-mmr-v1");
+  assert.equal(result.method, "subgenre-mmr-v2");
   assert.equal(result.seed.title, seed.title);
   assert.match(result.items[0].reasons.join(" "), /2012/);
   assert.equal(result.weights.genre, 0.75);
+});
+
+test("Green Room uses the rage subgenre instead of broad hip hop or nearby years", () => {
+  const greenRoom = { ...seed, title: "Green Room", artist: "Ken Carson", genres: ["Hip-Hop/Rap", "rage", "trap", "cloud rap"], releaseDate: "2023" };
+  const items = [candidate("generic", { genres: ["hip hop"], releaseDate: "2023" }), candidate("trap-only", { genres: ["trap"], releaseDate: "2023" }), candidate("rage-track", { artist: "Playboi Carti", genres: ["hip hop", "rage rap", "trap"], releaseDate: "2020" })];
+  for (const focus of ["balanced", "genre"]) assert.deepEqual(rankCandidates(greenRoom, items, { ...options, focus }).map((item) => item.slug), ["rage-track"]);
+  assert.deepEqual(discoveryGenres(greenRoom), ["rage rap"]);
+});
+
+test("broad-only metadata abstains instead of pretending all rap sounds similar", async () => {
+  const broad = { ...seed, genres: ["Hip-Hop/Rap"] };
+  assert.deepEqual(rankCandidates(broad, [candidate("rap", { genres: ["hip hop"] })], options), []);
+  const result = await retrieveCandidates(broad, options, { search: () => { throw new Error("should not search"); } });
+  assert.equal(result.providerStatus, "insufficient-metadata");
+});
+
+test("seed enrichment uses an unambiguous artist fallback and labels its evidence", async () => {
+  const broad = { ...seed, artist: "Ken Carson", genres: ["Hip-Hop/Rap"] };
+  const enriched = await enrichSeedGenres(broad, { search: async () => ({ results: [] }), findArtists: async () => [{ id: "ken-id", name: "Ken Carson" }], artistMetadata: async () => ({ name: "Ken Carson", genres: ["hip hop", "rage", "trap"] }) });
+  assert.deepEqual(discoveryGenres(enriched), ["rage rap"]);
+  const result = rankCandidates(enriched, [candidate("rage", { genres: ["rage rap"] })], options)[0];
+  assert.match(result.reasons[0], /artist-level/);
+  assert.equal(result.evidence.seedGenreContext.url, "https://musicbrainz.org/artist/ken-id");
+});
+
+test("exact recording subgenres override artist-level fallback", async () => {
+  const enriched = await enrichSeedGenres({ ...seed, genres: ["hip hop"] }, { search: async () => ({ results: [{ ...seed, genres: ["boom bap"] }] }), findArtists: async () => { throw new Error("must not use artist profile"); } });
+  assert.deepEqual(discoveryGenres(enriched), ["boom bap"]);
+});
+
+test("ambiguous artist names and mismatched titles cannot inject subgenres", async () => {
+  const broad = { ...seed, genres: ["hip hop"] };
+  const enriched = await enrichSeedGenres(broad, { search: async () => ({ results: [{ ...seed, title: "Wrong song", genres: ["rage"] }] }), findArtists: async () => [{ id: "a", name: seed.artist }, { id: "b", name: seed.artist }], artistMetadata: async () => { throw new Error("ambiguous artist"); } });
+  assert.deepEqual(enriched.genres, ["hip hop"]);
+});
+
+test("rage retrieval never expands back into all hip hop", async () => {
+  let query;
+  await retrieveCandidates({ ...seed, genres: ["hip hop", "rage", "trap"] }, options, { local: [], search: async (q) => { query = q; return { results: [] }; } });
+  assert.match(query, /tag:"rage"/);
+  assert.match(query, /tag:"rage rap"/);
+  assert.doesNotMatch(query, /tag:"hip hop"|tag:"trap"/);
 });
 test("requests and shared trails reject arbitrary URLs and unbounded input", () => {
   assert.equal(discoveryRequestSchema.safeParse({ seedSlug: "https://example.com" }).success, false);
