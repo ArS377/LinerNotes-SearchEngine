@@ -54,7 +54,7 @@ async function requestMusicBrainz(path, params) {
   if (cached) return cached;
   if (inFlight.has(cacheKey)) return inFlight.get(cacheKey);
 
-  const pending = withRateLimit(async () => {
+  const fetchResponse = async () => {
       const response = await fetchImplementation(url, {
         headers: {
           accept: "application/json",
@@ -64,9 +64,16 @@ async function requestMusicBrainz(path, params) {
       });
 
       if (!response.ok) {
-        throw new Error(`MusicBrainz returned ${response.status}`);
+        const error = new Error(`MusicBrainz returned ${response.status}`);
+        error.status = response.status;
+        throw error;
       }
       return response.json();
+    };
+  const pending = withRateLimit(fetchResponse)
+    .catch((error) => {
+      if (error.status === 503) return withRateLimit(fetchResponse);
+      throw error;
     })
     .then((body) => {
       writeCache(cacheKey, body);
@@ -139,7 +146,7 @@ export function normalizeMusicBrainzResult(recording) {
   const release = firstRelease(recording);
   const genres = [...(recording.genres?.length ? recording.genres : recording.tags || [])]
     .sort((left, right) => (right.count || 0) - (left.count || 0))
-    .slice(0, 3)
+    .slice(0, 12)
     .map((genre) => genre.name);
 
   return {
@@ -188,7 +195,8 @@ export async function searchMusicBrainzArtists(query, limit = 10) {
     sortName: artist["sort-name"] || artist.name,
     country: artist.country || artist.area?.name || null,
     disambiguation: artist.disambiguation || null,
-    score: Number(artist.score || 0)
+    score: Number(artist.score || 0),
+    genres: [...(artist.genres || []), ...(artist.tags || [])].filter((tag) => (tag.count ?? 1) > 0).map((tag) => tag.name)
   }));
 }
 

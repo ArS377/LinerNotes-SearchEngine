@@ -186,3 +186,17 @@ test("coalesces identical concurrent MusicBrainz requests", async () => {
   ]);
   assert.equal(requestCount, 1);
 });
+
+test("transient overload is retried once through the rate limiter", async () => {
+  let requests = 0;
+  setMusicBrainzFetchForTests(async () => ++requests === 1 ? { ok: false, status: 503 } : { ok: true, json: async () => ({ recordings: [] }) });
+  await searchMusicBrainz("retry overload");
+  assert.equal(requests, 2);
+});
+
+test("persistent overload stops after one retry", async () => {
+  let requests = 0;
+  setMusicBrainzFetchForTests(async () => { requests++; return { ok: false, status: 503 }; });
+  await assert.rejects(searchMusicBrainz("still overloaded"), /503/);
+  assert.equal(requests, 2);
+});

@@ -29,12 +29,27 @@ not arbitrary remote URLs.
 
 ## Candidate retrieval
 
-Resolve a local, MusicBrainz or Apple recording on the server. Use a verified exact
-title/artist match in Apple to fill missing seed genre metadata where possible.
-Retrieve up to 100 MusicBrainz recordings matching up to three seed tags, optionally
-including the same artist. Merge with the seven-record local catalog. Use bounded,
-quoted Lucene fields and the existing MusicBrainz request queue. Era-only fallback is
-available when a seed has a date but no tags and same-artist retrieval is disabled.
+Resolve a local, MusicBrainz or Apple recording on the server. Supplement broad
+store categories with exact normalized title/artist matches in MusicBrainz. If no
+specific recording genres are found, use an unambiguous matching artist's genre
+profile. Preserve artist-level provenance in `genreContext`; this is a fallback,
+not proof about the sound of every song by that artist.
+
+Select the most specific genre tier: explicit microgenres (rage rap, drill, plugg,
+pluggnb, boom bap, g-funk) before trap/cloud rap/regional hip hop, other specific
+genres, then umbrella categories. Normalize rage/rage rap and trap/trap music.
+Search up to 100 recordings using at most three selected genres. For specific rap
+subgenres, also search up to ten tagged artists and fetch up to twenty recordings
+from each of at most four matching artists. Exact artist credits are required;
+conflicting recording subgenres are not overwritten. Added artist evidence includes
+only genres shared with the seed, not unrelated free-form artist tags.
+
+Merge with local candidates, respecting filters and deduplication. No artist names
+or recommended songs are hardcoded. MusicBrainz searches remain rate-limited,
+cached and bounded; transient HTTP 503 receives one queued retry. Recording search
+retains twelve tags instead of three, so sparse subgenre evidence is less likely
+to be truncated. Broad-only metadata produces an insufficient-metadata response
+in balanced/genre modes, not a generic hip-hop/pop/rock recommendation list.
 
 MusicBrainz tags are preserved when a search response has no separate genres field.
 Prefer the recording's first-release-date over an associated release's date. Even
@@ -42,10 +57,13 @@ that date may reflect incomplete catalog history, so explanations say catalog ye
 
 ## Ranking
 
-Normalize genre punctuation and a small explicit alias list. For seed genres A and
-candidate genres B, compute Jaccard similarity:
+Normalize genre punctuation and aliases. Let S be the selected specific seed genres,
+A all seed genres and B all candidate genres. Score:
 
-`genre = |A intersection B| / |A union B|`
+`genre = 0.8 * |S intersection B| / |S| + 0.2 * Jaccard(A, B)`
+
+Matching the specific subgenre dominates; extra descriptive tags should not demote
+a well-described rage track below a sparsely tagged recording.
 
 For known release years, compute exponential proximity:
 
@@ -60,7 +78,7 @@ weights are hand-tuned and are not learned from user data:
 | Genre | 1.00 | 0.00 |
 | Era | 0.25 | 0.75 |
 
-Balanced and genre modes require at least one shared tag. Era mode also permits a
+Balanced and genre modes require a shared selected non-umbrella genre. Era mode also permits a
 candidate within five years without shared tags, and requires a known date. Do not
 pad results with unrelated recordings to reach the requested count.
 
@@ -101,7 +119,7 @@ recommendations per seed. Compare this baseline against genre-only and random-wi
 genre retrieval using save/open rate, relevant picks at five, artist diversity and
 preview coverage. Do not change weights based only on whether unit tests pass.
 
-Current limitations include a 100-candidate retrieval ceiling, sparse community tags,
+Current limitations include bounded retrieval (up to 180 remote candidates), sparse community tags,
 incomplete dates, limited preview coverage, and no popularity or listening-history
 model. "Outside my bookmarks" does not mean obscure or never heard before. Shared
 trails preserve the selected path; the recommendations at each node can change.

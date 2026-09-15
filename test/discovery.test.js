@@ -110,6 +110,16 @@ test("rage retrieval never expands back into all hip hop", async () => {
   assert.match(query, /tag:"rage rap"/);
   assert.doesNotMatch(query, /tag:"hip hop"|tag:"trap"/);
 });
+
+test("related-artist retrieval fills missing tags but preserves conflicting track styles", async () => {
+  const result = await retrieveCandidates({ ...seed, genres: ["hip hop", "rage"] }, options, {
+    local: [], findArtists: async () => [{ id: "related", name: "Related Artist", genres: ["hip hop", "rage", "2020s"] }],
+    search: async (query) => ({ results: query.startsWith("arid:") ? [candidate("untagged", { artist: "Related Artist", genres: [] }), candidate("different-style", { artist: "Related Artist", genres: ["boom bap"] }), candidate("wrong-credit", { genres: [] })] : [] })
+  });
+  assert.deepEqual(result.candidates.map((item) => item.slug), ["untagged"]);
+  assert.deepEqual(result.candidates[0].genres, ["hip hop", "rage rap"]);
+  assert.equal(result.candidates[0].genreContext.level, "artist");
+});
 test("requests and shared trails reject arbitrary URLs and unbounded input", () => {
   assert.equal(discoveryRequestSchema.safeParse({ seedSlug: "https://example.com" }).success, false);
   assert.equal(discoveryRequestSchema.safeParse({ seedSlug: "seed", limit: 100 }).success, false);

@@ -91,7 +91,8 @@ export function rankCandidates(seed, candidates, options) {
     seen.add(key);
     const itemGenres = genresOf(item), shared = overlap(seedGenres, itemGenres);
     const itemYear = yearOf(item), gap = seedYear && itemYear ? Math.abs(seedYear - itemYear) : null;
-    const genreScore = jaccard(seedGenres, itemGenres.filter((genre) => !broadGenres.has(genre) || !specificSeed));
+    // Extra descriptive tags must not punish a well-described subgenre match.
+    const genreScore = seedGenres.length ? 0.8 * shared.length / seedGenres.length + 0.2 * jaccard(genresOf(seed), itemGenres) : 0;
     const eraScore = gap === null ? 0 : Math.exp(-gap / 12);
     // Never fill the list with unrelated tracks merely to reach five results.
     if (!shared.length && !(options.focus === "era" && gap !== null && gap <= 5)) continue;
@@ -101,9 +102,10 @@ export function rankCandidates(seed, candidates, options) {
     const reasons = [];
     if (shared.length) reasons.push(`Shares ${new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(shared)} catalog tags with ${seed.title}.`);
     if (shared.length && seed.genreContext?.level === "artist") reasons[0] = `Tagged ${shared.join(", ")} in MusicBrainz, matching ${seed.artist}’s artist-level genre profile. This is not a verified sound match for ${seed.title}.`;
+    if (shared.length && item.genreContext?.level === "artist") reasons[0] = `${item.artist} and ${seed.artist} have ${shared.join(", ")} genre context in MusicBrainz. This pick uses artist metadata, not a verified sound match between these songs.`;
     if (gap !== null && selectedWeights.era > 0) reasons.push(`Catalog release year: ${itemYear}, ${gap === 0 ? "the same year as" : `${gap} year${gap === 1 ? "" : "s"} from`} your starting track (${seedYear}).`);
     if (options.unfamiliarArtists) reasons.push("This artist is not in your current bookmarks.");
-    const evidence = { genres: shared, seedGenreContext: seed.genreContext || { level: "recording" }, seedYear, candidateYear: itemYear, source: item.source || "Liner Notes", url: item.musicBrainzId ? `https://musicbrainz.org/recording/${item.musicBrainzId}` : item.appleMusicUrl || null };
+    const evidence = { genres: shared, seedGenreContext: seed.genreContext || { level: "recording" }, candidateGenreContext: item.genreContext || { level: "recording" }, seedYear, candidateYear: itemYear, source: item.source || "Liner Notes", url: item.musicBrainzId ? `https://musicbrainz.org/recording/${item.musicBrainzId}` : item.appleMusicUrl || null };
     pool.push({ ...item, reasons, evidence, score: Number(score.toFixed(4)), components: { genre: Number(genreScore.toFixed(4)), era: Number(eraScore.toFixed(4)) } });
   }
   pool.sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug));
@@ -138,7 +140,27 @@ export async function retrieveCandidates(seed, options, dependencies = {}) {
   if (options.differentArtists) query += ` AND NOT artist:${quote(seed.artist)}`;
   try {
     const remote = await search(query, 100);
-    return { candidates: [...local, ...remote.results], providerStatus: "ok" };
+    const related = [];
+    // Artist tags cover catalogs whose individual recordings are not tagged yet.
+    const findArtists = dependencies.findArtists || (!dependencies.search ? searchMusicBrainzArtists : null);
+    if (findArtists && seedGenres.some((genre) => specificity(genre) >= 2)) {
+      try {
+        const artists = await findArtists(queryParts.filter((part) => part.startsWith("tag:")).join(" OR "), 10);
+        for (const artist of artists.filter((artist) => overlap(seedGenres, genresOf(artist)).length && (!options.differentArtists || normalize(artist.name) !== normalize(seed.artist))).slice(0, 4)) {
+          try {
+            const tracks = await search(`arid:${quote(artist.id)} AND status:official`, 20);
+            for (const track of tracks.results) {
+              if (normalize(track.artist) !== normalize(artist.name)) continue;
+              const own = discoveryGenres(track);
+              // Never overwrite a conflicting recording-level subgenre.
+              if (own.some((genre) => specificity(genre) >= 2) && !overlap(seedGenres, own).length) continue;
+              related.push({ ...track, genres: [...new Set([...genresOf(track), ...overlap(genresOf(artist), genresOf(seed))])], genreContext: { level: "artist", name: artist.name, url: `https://musicbrainz.org/artist/${artist.id}` } });
+            }
+          } catch { /* A missing artist catalog must not discard other candidates. */ }
+        }
+      } catch { /* Recording-tag retrieval remains usable. */ }
+    }
+    return { candidates: [...local, ...remote.results, ...related], providerStatus: "ok" };
   } catch {
     return { candidates: local, providerStatus: "unavailable" };
   }
