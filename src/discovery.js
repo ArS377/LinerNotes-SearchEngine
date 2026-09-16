@@ -122,9 +122,14 @@ export function rankCandidates(seed, candidates, options) {
   pool.sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug));
   const selected = [];
   while (pool.length && selected.length < (options.limit || 5)) {
-    let bestIndex = 0, bestValue = -Infinity;
+    let bestIndex = -1, bestValue = -Infinity;
     for (let index = 0; index < pool.length; index++) {
       const candidate = pool[index];
+      // A short discovery list should not become an album tracklist. Prefer
+      // fewer qualified results over backfilling with repeated albums/artists.
+      const artist = normalize(candidate.artist), album = normalize(candidate.album || "");
+      if (selected.filter((item) => normalize(item.artist) === artist).length >= 2) continue;
+      if (album && album !== "release unknown" && selected.some((item) => normalize(item.artist) === artist && normalize(item.album || "") === album)) continue;
       const redundancy = selected.length ? Math.max(...selected.map((item) =>
         Math.max(normalize(item.artist) === normalize(candidate.artist) ? 0.85 : 0,
           item.album && candidate.album && normalize(item.album) !== "release unknown" && normalize(item.album) === normalize(candidate.album) ? 0.8 : 0)
@@ -133,6 +138,7 @@ export function rankCandidates(seed, candidates, options) {
       const value = 0.75 * candidate.score - 0.25 * redundancy;
       if (value > bestValue) { bestIndex = index; bestValue = value; }
     }
+    if (bestIndex < 0) break;
     selected.push(pool.splice(bestIndex, 1)[0]);
   }
   return selected;

@@ -73,6 +73,10 @@ Missing dates contribute zero. Balanced weights are 0.75 genre/0.25 era; genre m
 is 1/0; era mode is 0.25/0.75. These weights are hand-tuned, not trained.
 Artist and album diversity use the existing MMR reranker:
 `0.75 * relevance - 0.25 * maximum redundancy`.
+The final list allows at most two recordings per artist and one per known
+artist/album pair. Unknown album names are not grouped together. These caps apply
+to every genre and can produce a shorter list; unrelated music is never added to
+fill the remaining slots.
 
 Seed, duplicates, dismissed/bookmarked recordings and excluded artists are filtered.
 Preview/artwork enrichment requires an exact normalized title AND artist match.
