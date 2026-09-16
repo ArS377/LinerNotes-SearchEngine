@@ -81,7 +81,7 @@ export async function cached(key, loader, options = {}) {
   const operation = Promise.resolve()
     .then(loader)
     .then(async (value) => {
-      await setCached(key, value, options);
+      if (!options.shouldCache || options.shouldCache(value)) await setCached(key, value, options);
       return value;
     })
     .catch(async (error) => {

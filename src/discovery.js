@@ -142,7 +142,7 @@ export async function retrieveCandidates(seed, options, dependencies = {}) {
   const search = dependencies.search || searchMusicBrainz;
   const local = dependencies.local || catalogSummaries();
   const seedGenres = discoveryGenres(seed).slice(0, 3);
-  if (options.focus !== "era" && !seedGenres.length) return { candidates: [], providerStatus: seed.genreResearch?.status === "unavailable" ? "unavailable" : "insufficient-metadata" };
+  if (options.focus !== "era" && !seedGenres.length) return { candidates: [], providerStatus: ["unavailable", "partial"].includes(seed.genreResearch?.status) ? "unavailable" : "insufficient-metadata" };
   const queryParts = seedGenres.map((genre) => `tag:${quote(genre)}`);
   if (!options.differentArtists) queryParts.push(`artist:${quote(seed.artist)}`);
   if (!queryParts.length && options.focus === "era" && yearOf(seed)) queryParts.push(`firstreleasedate:[${yearOf(seed) - 3} TO ${yearOf(seed) + 3}]`);
@@ -194,7 +194,7 @@ export async function discover(rawOptions, dependencies = {}) {
   const options = discoveryRequestSchema.parse(rawOptions);
   const seed = await (dependencies.resolveSeed || resolveSeed)(options.seedSlug);
   const load = () => retrieveCandidates(seed, options, dependencies);
-  const retrieval = dependencies.search ? await load() : await cached(`discovery:v3:${seed.slug}:${discoveryGenres(seed).join(",")}:${options.differentArtists}:${options.focus === "era"}`, load, { ttlSeconds: 300 });
+  const retrieval = dependencies.search ? await load() : await cached(`discovery:v4:${seed.slug}:${discoveryGenres(seed).join(",")}:${options.differentArtists}:${options.focus === "era"}`, load, { ttlSeconds: 300, shouldCache: (value) => value.providerStatus === "ok" });
   const ranked = rankCandidates(seed, retrieval.candidates, options);
   const items = await Promise.all(ranked.map(dependencies.enrich || enrichPreview));
   return {
