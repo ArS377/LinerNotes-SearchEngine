@@ -3,7 +3,7 @@ import type { AgentResponse } from "../src/contracts/api.js";
 import { ResearchSources } from "./ResearchSources.js";
 
 // Render a small Markdown subset as React nodes. Model HTML is always escaped.
-export function ResearchAnswer({ response }: { response: AgentResponse }) {
+export function ResearchAnswer({ response, comparison = false }: { response: AgentResponse; comparison?: boolean }) {
   function inline(value: string) {
     return value.split(/(\*\*[^*]+\*\*|\[\d+\])/g).map((part, index) => {
       if (part.startsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
@@ -16,7 +16,7 @@ export function ResearchAnswer({ response }: { response: AgentResponse }) {
   const cells = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
   const lines = response.answer.trim().split(/\r?\n/);
   const blocks: React.ReactNode[] = [];
-  let summary = "";
+  const summaries: string[] = [];
   for (let index = 0; index < lines.length;) {
     const line = lines[index].trim();
     if (!line) { index++; continue; }
@@ -35,12 +35,12 @@ export function ResearchAnswer({ response }: { response: AgentResponse }) {
       const paragraph = [line]; index++;
       while (index < lines.length && lines[index].trim() && !/^(?:#{1,6}\s|[-*]\s|\d+\.\s)/.test(lines[index].trim()) && !lines[index].includes("|")) paragraph.push(lines[index++].trim());
       const value = paragraph.join(" ");
-      if (!summary && !blocks.length) summary = value;
+      if (!blocks.length && (comparison || !summaries.length)) summaries.push(value);
       else blocks.push(<p key={index}>{inline(value)}</p>);
     }
   }
   return <div className="research-answer">
-    {summary && <p className="research-answer-summary">{inline(summary)}</p>}
+    {summaries.map((summary, index) => <p className="research-answer-summary" key={index}>{inline(summary)}</p>)}
     {blocks.length > 0 && <details className="research-learn-more"><summary>Learn more</summary><div>{blocks}</div></details>}
     <ResearchSources response={response} />
   </div>;

@@ -15,7 +15,7 @@ export function comparisonContext(items: RecordingSummary[]) {
   })) };
 }
 
-const prompt = "Compare all supplied recordings using music details and web research. Begin with a two-sentence summary. Then provide a compact Markdown table with an Aspect column and one column per recording, covering supported musical style, themes and production. End with one short paragraph on uncertainty. Cite web claims using the provided numeric source IDs in brackets. Do not assume these are versions of the same song. Do not claim to have listened to the audio or infer quality or a winner.";
+const prompt = "Compare all supplied recordings using music details and web research. Begin with a separate brief paragraph for EVERY recording, in selection order. Start each paragraph with its bold song title and artist, and explain what that song is about (its story or lyrical themes), not just its genre or structure. Separate paragraphs with blank lines; no introductory heading. If a song's meaning is unsupported, explicitly say so in its paragraph; do not omit it or invent a meaning. Distinguish interpretations from confirmed statements. Then provide a compact Markdown table with an Aspect column and one column per recording, covering supported musical style, themes and production. End with a short uncertainty note when needed. Cite web claims using the provided numeric source IDs in brackets. Do not assume these are versions of the same song. Do not claim to have listened to the audio or infer quality or a winner.";
 
 export function Comparison({ items, enabled }: { items: RecordingSummary[]; enabled: boolean }) {
   // Remount when the selection changes so an old response cannot describe a new pair.
@@ -35,7 +35,7 @@ function ComparisonRequest({ context, enabled }: { context: ReturnType<typeof co
     <div aria-live="polite" aria-busy={comparison.isPending}>
       {comparison.isPending && <p>Comparing the selected recordings…</p>}
       {comparison.error && <p role="alert">Comparison couldn’t load. {comparison.error.message}</p>}
-      {!comparison.isPending && !comparison.error && comparison.data && <div className="comparison-answer"><ResearchAnswer response={comparison.data} /></div>}
+      {!comparison.isPending && !comparison.error && comparison.data && <div className="comparison-answer"><ResearchAnswer response={comparison.data} comparison /></div>}
     </div>
   </section>;
 }

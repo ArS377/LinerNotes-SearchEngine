@@ -4,6 +4,22 @@ import { describe, it, expect } from "vitest";
 import { ResearchAnswer } from "./ResearchAnswer.js";
 
 describe("research answer presentation", () => {
+  it.each([2, 3])("keeps all %i recording introductions above the comparison disclosure", (count) => {
+    const introductions = Array.from({ length: count }, (_, index) => `**Song ${index + 1}** explores theme ${index + 1}.`);
+    const html = renderToStaticMarkup(<ResearchAnswer comparison response={{ answer: `${introductions.join("\n\n")}\n\n| Aspect | Details |\n| --- | --- |\n| Style | Rock |\n\nUncertainty note.`, citations: [], suggestions: [], confidence: "partial", model: "test", toolActivity: [] }} />);
+    const [visible, details] = html.split("<details");
+    for (let index = 1; index <= count; index++) expect(visible).toContain(`<strong>Song ${index}</strong>`);
+    expect(details).toContain("<table>");
+    expect(details).toContain("Uncertainty note.");
+    expect(visible).not.toContain("Uncertainty note.");
+  });
+  it("keeps additional single-song paragraphs inside Learn more", () => {
+    const html = renderToStaticMarkup(<ResearchAnswer response={{ answer: "Short answer.\n\nExtra background.", citations: [], suggestions: [], confidence: "partial", model: "test", toolActivity: [] }} />);
+    const [visible, details] = html.split("<details");
+    expect(visible).toContain("Short answer.");
+    expect(visible).not.toContain("Extra background.");
+    expect(details).toContain("Extra background.");
+  });
   it("keeps a summary visible and renders a cited table inside a closed disclosure", () => {
     const html = renderToStaticMarkup(<ResearchAnswer response={{ answer: "Short summary [1].\n\n| Aspect | Meaning |\n| --- | --- |\n| Theme | **Interpretation** [1] |", citations: [{ id: 1, title: "Interview", url: "https://example.com" }], suggestions: [], confidence: "partial", model: "test", toolActivity: [] }} />);
     expect(html).toContain("research-answer-summary");
