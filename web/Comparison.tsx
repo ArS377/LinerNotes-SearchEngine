@@ -34,7 +34,7 @@ function ComparisonRequest({ context, enabled }: { context: ReturnType<typeof co
     {!enabled && <p role="status">AI comparison needs a DeepInfra API key on the server. Add it to .env and restart the backend.</p>}
     {!enough && <p>Select at least two recordings to generate a comparison.</p>}
     <div aria-live="polite" aria-busy={comparison.isPending}>
-      {comparison.isPending && <p className="comparison-loading"><span className="comparison-loading__mark" aria-hidden="true"><span /></span><span>{comparisonLoadingLabel}</span></p>}
+      {comparison.isPending && <p className="comparison-loading"><span className="comparison-loading__mark" aria-hidden="true">✦</span><span>{comparisonLoadingLabel}</span></p>}
       {comparison.error && <p role="alert">Comparison couldn’t load. {comparison.error.message}</p>}
       {!comparison.isPending && !comparison.error && comparison.data && <div className="comparison-answer"><ResearchAnswer response={comparison.data} /></div>}
     </div>
