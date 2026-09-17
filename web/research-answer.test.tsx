@@ -5,13 +5,15 @@ import { ResearchAnswer } from "./ResearchAnswer.js";
 
 describe("research answer presentation", () => {
   it.each([2, 3])("keeps all %i recording introductions above the comparison disclosure", (count) => {
-    const introductions = Array.from({ length: count }, (_, index) => `**Song ${index + 1}** explores theme ${index + 1}.`);
-    const html = renderToStaticMarkup(<ResearchAnswer comparison response={{ answer: `${introductions.join("\n\n")}\n\n| Aspect | Details |\n| --- | --- |\n| Style | Rock |\n\nUncertainty note.`, citations: [], suggestions: [], confidence: "partial", model: "test", toolActivity: [] }} />);
+    const introductions = Array.from({ length: count }, (_, index) => ({ title: `Song ${index + 1}`, artist: "Artist", text: `Explores theme ${index + 1}.` }));
+    const html = renderToStaticMarkup(<ResearchAnswer response={{ answer: "Duplicate legacy summary must not render.", comparison: { introductions, rows: [{ aspect: "Style", cells: introductions.map(() => "Rock") }], uncertainty: "Uncertainty note." }, citations: [], suggestions: [], confidence: "partial", model: "test", toolActivity: [] }} />);
     const [visible, details] = html.split("<details");
     for (let index = 1; index <= count; index++) expect(visible).toContain(`<strong>Song ${index}</strong>`);
     expect(details).toContain("<table>");
     expect(details).toContain("Uncertainty note.");
     expect(visible).not.toContain("Uncertainty note.");
+    expect(html).not.toContain("Duplicate legacy summary");
+    expect(visible.match(/research-answer-summary/g)).toHaveLength(count);
   });
   it("keeps additional single-song paragraphs inside Learn more", () => {
     const html = renderToStaticMarkup(<ResearchAnswer response={{ answer: "Short answer.\n\nExtra background.", citations: [], suggestions: [], confidence: "partial", model: "test", toolActivity: [] }} />);

@@ -3,7 +3,7 @@ import type { AgentResponse } from "../src/contracts/api.js";
 import { ResearchSources } from "./ResearchSources.js";
 
 // Render a small Markdown subset as React nodes. Model HTML is always escaped.
-export function ResearchAnswer({ response, comparison = false }: { response: AgentResponse; comparison?: boolean }) {
+export function ResearchAnswer({ response }: { response: AgentResponse }) {
   function inline(value: string) {
     return value.split(/(\*\*[^*]+\*\*|\[\d+\])/g).map((part, index) => {
       if (part.startsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
@@ -12,6 +12,20 @@ export function ResearchAnswer({ response, comparison = false }: { response: Age
       if (citation?.url && /^https?:\/\//i.test(citation.url)) return <a key={index} href={citation.url} target="_blank" rel="noopener noreferrer" aria-label={`Source ${match![1]}: ${citation.title}`}>{part}</a>;
       return part;
     });
+  }
+  if (response.comparison) {
+    const { introductions, rows, uncertainty } = response.comparison;
+    return <div className="research-answer">
+      {introductions.map((item, index) => <p className="research-answer-summary" key={index}><strong>{item.title}</strong> by {item.artist}: {inline(item.text)}</p>)}
+      <details className="research-learn-more"><summary>Learn more</summary><div>
+        <div className="research-table-wrap" role="region" aria-label="Research details" tabIndex={0}><table>
+          <thead><tr><th scope="col">Aspect</th>{introductions.map((item, index) => <th scope="col" key={index}>{item.title}</th>)}</tr></thead>
+          <tbody>{rows.map((row, index) => <tr key={index}><th scope="row">{inline(row.aspect)}</th>{row.cells.map((cell, i) => <td key={i}>{inline(cell)}</td>)}</tr>)}</tbody>
+        </table></div>
+        {uncertainty && <p>{inline(uncertainty)}</p>}
+      </div></details>
+      <ResearchSources response={response} />
+    </div>;
   }
   const cells = (line: string) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
   const lines = response.answer.trim().split(/\r?\n/);
@@ -35,7 +49,7 @@ export function ResearchAnswer({ response, comparison = false }: { response: Age
       const paragraph = [line]; index++;
       while (index < lines.length && lines[index].trim() && !/^(?:#{1,6}\s|[-*]\s|\d+\.\s)/.test(lines[index].trim()) && !lines[index].includes("|")) paragraph.push(lines[index++].trim());
       const value = paragraph.join(" ");
-      if (!blocks.length && (comparison || !summaries.length)) summaries.push(value);
+      if (!blocks.length && !summaries.length) summaries.push(value);
       else blocks.push(<p key={index}>{inline(value)}</p>);
     }
   }

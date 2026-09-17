@@ -25,6 +25,22 @@ test("DeepInfra is disabled without a key", async () => {
   await assert.rejects(askDeepInfra("What album?"), { code: "NOT_CONFIGURED" });
 });
 
+test("comparison requests use JSON and return one validated introduction per recording", async () => {
+  process.env.DEEPINFRA_API_KEY = "test-key";
+  const context = { type: "comparison", recordings: [{ title: "First song", artist: "First artist" }, { title: "Second song", artist: "Second artist" }] };
+  setDeepInfraFetchForTests(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.equal(body.response_format.type, "json_object");
+    assert.doesNotMatch(body.messages[0].content, /Format the response in Markdown/);
+    const content = JSON.stringify({ introductions: [{ recordingIndex: 0, text: "First story [1]." }, { recordingIndex: 1, text: "Second story [1]." }], rows: [{ aspect: "Style", cells: ["Rock [1]", "Pop [1]"] }], uncertainty: "" });
+    return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) };
+  });
+  const result = await askDeepInfra("Compare", context);
+  assert.equal(result.comparison.introductions.length, 2);
+  assert.equal(result.comparison.introductions[1].title, "Second song");
+  assert.equal(result.citations[0].id, 1);
+});
+
 test("cheap default and bounded generation keep untrusted context separate from instructions", async () => {
   process.env.DEEPINFRA_API_KEY = "test-key";
   delete process.env.DEEPINFRA_MODEL;

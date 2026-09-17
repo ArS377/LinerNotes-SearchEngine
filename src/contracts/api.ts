@@ -87,6 +87,11 @@ export const agentMessageSchema = z.object({
 });
 
 export const agentResponseSchema = z.object({
+  comparison: z.object({
+    introductions: z.array(z.object({ title: z.string(), artist: z.string(), text: z.string() })).min(2).max(3),
+    rows: z.array(z.object({ aspect: z.string(), cells: z.array(z.string()).min(2).max(3) })),
+    uncertainty: z.string()
+  }).optional(),
   researchStatus: z.enum(["ok", "partial", "unavailable", "empty", "not-configured"]).optional(),
   answer: z.string(),
   citations: z.array(citationSchema),
