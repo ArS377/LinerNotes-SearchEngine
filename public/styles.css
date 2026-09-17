@@ -178,14 +178,22 @@ main { min-height: calc(100vh - 170px); }
 .related-versions span { color: var(--muted); font-size: 14px; }
 .compare-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .compare-grid article { position: relative; min-width: 0; }
-.compare-art { aspect-ratio: 1; background: #dedbd7 center / cover; margin-bottom: 16px; border-radius: 4px; }
+.compare-art { width: 112px; max-width: 100%; aspect-ratio: 1; background: #dedbd7 center / cover; margin-bottom: 16px; border-radius: 4px; }
 .compare-grid h2 { font-size: 30px; margin-top: 8px; }
 .compare-grid article > p { color: var(--muted); }
 .compare-grid dl { display: grid; grid-template-columns: 80px 1fr; font-size: 14px; }
 .compare-grid dt, .compare-grid dd { padding: 10px 0; margin: 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .compare-grid dt { color: var(--muted); }
 .remove-compare { position: absolute; top: 8px; right: 8px; font-size: 12px; }
-.comparison-summary { max-width: 720px; margin-top: 32px; }
+.comparison-analysis { border-block: 1px solid var(--line); padding-block: 24px; margin-bottom: 32px; }
+.comparison-analysis-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.comparison-analysis-heading h2 { font-size: 28px; margin: 0 0 4px; }
+.comparison-analysis-heading p { margin: 0; color: var(--muted); }
+.comparison-analysis-heading button { flex-shrink: 0; }
+.comparison-answer { max-width: 780px; margin-top: 24px; overflow-wrap: anywhere; }
+.comparison-answer > p:first-child { white-space: pre-line; line-height: 1.7; }
+.comparison-disclaimer { color: var(--muted); font-size: 14px; }
+@media (max-width: 640px) { .comparison-analysis-heading { align-items: stretch; flex-direction: column; gap: 16px; } }
 .compare-tray { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 16px; border-top: 1px solid var(--line); font-size: 14px; }
 .compare-tray button { display: flex; align-items: center; gap: 16px; background: var(--coral); border: 0; }
 .insight-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; border-block: 1px solid var(--line); padding-block: 24px; }
