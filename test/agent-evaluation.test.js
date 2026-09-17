@@ -19,6 +19,28 @@ afterEach(() => {
   }
 });
 
+test("a real fetch TimeoutError is retried and can recover", async () => {
+  process.env.DEEPINFRA_API_KEY = "test-key";
+  let calls = 0;
+  setDeepInfraFetchForTests(async () => {
+    if (++calls === 1) throw new globalThis.DOMException("Timed out", "TimeoutError");
+    return { ok: true, json: async () => ({ choices: [{ message: { content: "Supported answer [1]." } }] }) };
+  });
+  assert.equal((await askDeepInfra("Meaning?")).answer, "Supported answer [1].");
+  assert.equal(calls, 2);
+});
+
+test("persistent timeouts stop after two attempts with a useful error", async () => {
+  process.env.DEEPINFRA_API_KEY = "test-key";
+  let calls = 0;
+  setDeepInfraFetchForTests(async () => {
+    calls++;
+    throw new globalThis.DOMException("Timed out", "TimeoutError");
+  });
+  await assert.rejects(askDeepInfra("Meaning?"), { code: "PROVIDER_TIMEOUT" });
+  assert.equal(calls, 2);
+});
+
 test("DeepInfra is disabled without a key", async () => {
   delete process.env.DEEPINFRA_API_KEY;
   assert.equal(deepInfraConfigured(), false);

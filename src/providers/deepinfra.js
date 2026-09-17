@@ -50,7 +50,7 @@ export async function askDeepInfra(prompt, context = {}) {
           { role: "user", content: JSON.stringify({ question: prompt.trim(), catalogContext: context ?? {}, webResearch: research }) }
         ].map((message, index) => isComparison && index === 0 ? { ...message, content: message.content.split("Format the response in Markdown.")[0] } : message)
       }),
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(isComparison ? 45000 : 30000)
     });
     // Do not expose provider response bodies, credentials, or request context.
     if (!response.ok) {
@@ -67,23 +67,29 @@ export async function askDeepInfra(prompt, context = {}) {
     return { answer, status: response.status || 200 };
   };
 
-  let completion;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      completion = await createCompletion();
-      break;
-    } catch (error) {
-      if (error.code !== "PROVIDER_BUSY" || attempt === 1) throw error;
-      await pause(350);
+  const completeWithRecovery = async (repair = false) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await createCompletion(repair);
+      } catch (error) {
+        const timedOut = error.name === "TimeoutError" || error.name === "AbortError";
+        logEvent("error", "assistant_completion_failed", { provider: "deepinfra", code: timedOut ? "PROVIDER_TIMEOUT" : error.code || "INVALID_RESPONSE", attempt: attempt + 1 });
+        if ((!timedOut && error.code !== "PROVIDER_BUSY") || attempt === 1) {
+          if (timedOut) throw Object.assign(new Error("The music assistant took too long to respond. Please try again."), { code: "PROVIDER_TIMEOUT" });
+          throw error;
+        }
+        await pause(350);
+      }
     }
-  }
+  };
+  let completion = await completeWithRecovery();
   let answer = completion.answer;
   let comparison;
   if (isComparison) {
     try {
       comparison = parseComparison(answer, context.recordings);
     } catch {
-      completion = await createCompletion(true);
+      completion = await completeWithRecovery(true);
       answer = completion.answer;
       comparison = parseComparison(answer, context.recordings);
     }

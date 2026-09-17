@@ -362,6 +362,10 @@ async function handleRequest(request, response) {
         });
         return;
       }
+      if (error.code === "PROVIDER_TIMEOUT") {
+        sendJson(response, 504, { error: error.message });
+        return;
+      }
       if (error.code === "PROVIDER_BUSY") {
         sendJson(response, 503, { error: "The AI provider is busy or rate-limited. Please try again shortly." });
         return;
