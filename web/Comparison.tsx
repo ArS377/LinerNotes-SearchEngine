@@ -16,6 +16,7 @@ export function comparisonContext(items: RecordingSummary[]) {
 }
 
 const prompt = "Compare all supplied recordings using web research. Explain each song's story or lyrical themes once, distinguishing interpretations from confirmed statements. Compare supported musical style and production in the detail rows. Cite web claims. Say when evidence is missing. Do not assume these are versions of the same song, claim to have listened to audio, or choose a winner.";
+export const comparisonLoadingLabel = "Comparing the selected recordings…";
 
 export function Comparison({ items, enabled }: { items: RecordingSummary[]; enabled: boolean }) {
   // Remount when the selection changes so an old response cannot describe a new pair.
@@ -33,7 +34,7 @@ function ComparisonRequest({ context, enabled }: { context: ReturnType<typeof co
     {!enabled && <p role="status">AI comparison needs a DeepInfra API key on the server. Add it to .env and restart the backend.</p>}
     {!enough && <p>Select at least two recordings to generate a comparison.</p>}
     <div aria-live="polite" aria-busy={comparison.isPending}>
-      {comparison.isPending && <p>Comparing the selected recordings…</p>}
+      {comparison.isPending && <p className="comparison-loading"><span className="comparison-loading__mark" aria-hidden="true"><span /></span><span>{comparisonLoadingLabel}</span></p>}
       {comparison.error && <p role="alert">Comparison couldn’t load. {comparison.error.message}</p>}
       {!comparison.isPending && !comparison.error && comparison.data && <div className="comparison-answer"><ResearchAnswer response={comparison.data} /></div>}
     </div>

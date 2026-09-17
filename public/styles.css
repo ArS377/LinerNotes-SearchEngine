@@ -192,6 +192,10 @@ main { min-height: calc(100vh - 170px); }
 .comparison-analysis-heading p { margin: 0; color: var(--muted); }
 .comparison-analysis-heading button { flex-shrink: 0; }
 .comparison-answer { max-width: 780px; margin-top: 24px; overflow-wrap: anywhere; }
+.comparison-loading { display: flex; align-items: center; gap: 10px; margin: 18px 0 0; }
+.comparison-loading__mark { display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%; background: linear-gradient(115deg, #d6d0c8 20%, var(--coral) 48%, #fff3ef 57%, #d6d0c8 80%); background-size: 220% 100%; animation: comparison-shimmer 1.35s linear infinite; }
+.comparison-loading__mark > span { width: 7px; height: 7px; border-radius: 50%; background: var(--paper); }
+@keyframes comparison-shimmer { to { background-position: -220% 0; } }
 .comparison-answer > p:first-child { white-space: pre-line; line-height: 1.7; }
 .comparison-disclaimer { color: var(--muted); font-size: 14px; }
 @media (max-width: 640px) { .comparison-analysis-heading { align-items: stretch; flex-direction: column; gap: 16px; } }
@@ -362,4 +366,4 @@ footer button { background: none; border: 0; padding: 0; font-size: 13px; }
   .discovery-result-actions { flex-wrap: wrap; }
   .trail-library { grid-template-columns: 1fr; }
 }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } .comparison-loading__mark { animation: none; background-position: 50% 0; } }

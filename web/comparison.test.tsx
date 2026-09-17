@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { Comparison, comparisonContext } from "./Comparison.js";
+import { Comparison, comparisonContext, comparisonLoadingLabel } from "./Comparison.js";
 
 const items = [{ slug: "one", title: "First track", artist: "First artist", genres: ["rock"], album: "First album" }, { slug: "two", title: "Second track", artist: "Second artist" }];
 function render(enabled: boolean, selection = items) {
@@ -14,6 +14,9 @@ describe("comparison", () => {
     expect(html).toContain("Compare these recordings");
     expect(html).not.toContain("disabled");
     expect(html).not.toContain("AI-generated from");
+  });
+  it("includes a labelled loading treatment for comparison requests", () => {
+    expect(comparisonLoadingLabel).toBe("Comparing the selected recordings…");
   });
   it("disables paid requests without configuration or two recordings", () => {
     expect(render(false)).toContain("disabled");
