@@ -2,7 +2,7 @@ import React, { FormEvent, createContext, useContext, useEffect, useMemo, useRef
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { api, askAgent, getRecommendations, searchMusic } from "./api.js";
-import { ResearchSources } from "./ResearchSources.js";
+import { ResearchAnswer } from "./ResearchAnswer.js";
 import { Discovery, TrailLibrary } from "./Discovery.js";
 import { Comparison } from "./Comparison.js";
 import type { RecordingSummary } from "../src/contracts/api.js";
@@ -127,7 +127,7 @@ function MusicBrief({ context, assistantEnabled }: { context: Record<string, unk
   const results = Array.isArray(context.results) ? context.results as RecordingSummary[] : [];
   const sources = [...new Set(results.flatMap((item) => item.providers || [item.source || "Liner Notes"]))];
   if (!assistantEnabled) return null;
-  return <section className="assistant-panel"><div className="assistant-panel__heading"><h2>Ask about this music</h2><p>{results.length ? `Ask about these recordings, their artists, or how the versions differ. Sources: ${sources.join(" · ")}.` : "Ask about the artists, credits, or story behind this recording."}</p></div>{assistantEnabled && <div className="assistant-panel__body"><form className="assistant-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}><label htmlFor="agent-prompt">Your question</label><textarea id="agent-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={2000} required placeholder="Compare versions or explain the context" /><button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Researching…" : "Ask"}</button></form><div className="assistant-response" aria-live="polite">{mutation.error && <p>{mutation.error.message}</p>}{mutation.data && <><p>{mutation.data.answer}</p><ResearchSources response={mutation.data} /></>}</div></div>}</section>;
+  return <section className="assistant-panel"><div className="assistant-panel__heading"><h2>Ask about this music</h2><p>{results.length ? `Ask about these recordings, their artists, or how the versions differ. Sources: ${sources.join(" · ")}.` : "Ask about the artists, credits, or story behind this recording."}</p></div>{assistantEnabled && <div className="assistant-panel__body"><form className="assistant-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}><label htmlFor="agent-prompt">Your question</label><textarea id="agent-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={2000} required placeholder="Compare versions or explain the context" /><button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Researching…" : "Ask"}</button></form><div className="assistant-response" aria-live="polite">{mutation.error && <p>{mutation.error.message}</p>}{mutation.data && <ResearchAnswer response={mutation.data} />}</div></div>}</section>;
 }
 
 function Cards({ recordings, profile, toggleBookmark, toggleCompare }: { recordings: RecordingSummary[]; profile: Profile; toggleBookmark: (item: RecordingSummary) => void; toggleCompare: (item: RecordingSummary) => void }) {
