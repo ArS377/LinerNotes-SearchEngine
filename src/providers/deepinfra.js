@@ -1,3 +1,5 @@
+import { logEvent } from "../observability.js";
+
 export const DEFAULT_MODEL = "google/gemma-3-4b-it";
 let fetchImplementation = globalThis.fetch;
 
@@ -33,10 +35,16 @@ export async function askDeepInfra(prompt, context = {}) {
     signal: AbortSignal.timeout(20000)
   });
   // Do not expose provider response bodies, credentials, or request context.
-  if (!response.ok) throw new Error(`DeepInfra request failed (${response.status}).`);
+  if (!response.ok) {
+    logEvent("error", "assistant_provider_failed", { provider: "deepinfra", status: response.status });
+    throw Object.assign(new Error(`DeepInfra request failed (${response.status}).`), {
+      code: response.status === 429 ? "PROVIDER_BUSY" : "PROVIDER_ERROR"
+    });
+  }
   const body = await response.json();
   const answer = body.choices?.[0]?.message?.content;
   if (typeof answer !== "string" || !answer.trim()) throw new Error("DeepInfra returned an empty answer.");
+  logEvent("info", "assistant_provider_succeeded", { provider: "deepinfra", status: response.status || 200 });
   return {
     answer: answer.trim(), citations: [], suggestions: [], confidence: "partial",
     model, toolActivity: []

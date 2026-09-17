@@ -56,3 +56,14 @@ test("failures and empty responses fail safely without retries or leaking provid
   setDeepInfraFetchForTests(async () => ({ ok: true, json: async () => ({ choices: [] }) }));
   await assert.rejects(askDeepInfra("Question"), /empty answer/);
 });
+
+test("provider overload is classified without reading private response bodies or retrying", async () => {
+  process.env.DEEPINFRA_API_KEY = "test-key";
+  let calls = 0;
+  setDeepInfraFetchForTests(async () => {
+    calls++;
+    return { ok: false, status: 429, text: () => assert.fail("must not expose response body") };
+  });
+  await assert.rejects(askDeepInfra("Question"), { code: "PROVIDER_BUSY" });
+  assert.equal(calls, 1);
+});

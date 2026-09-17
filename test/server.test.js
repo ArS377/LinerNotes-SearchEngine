@@ -216,6 +216,24 @@ test("assistant endpoint sends catalog context to DeepInfra", async () => {
   }
 });
 
+test("assistant explains provider overload without exposing upstream details", async () => {
+  const previous = process.env.DEEPINFRA_API_KEY;
+  process.env.DEEPINFRA_API_KEY = "test-key";
+  try {
+    setDeepInfraFetchForTests(async () => ({ ok: false, status: 429 }));
+    const response = await fetch(`${baseUrl}/api/assistant`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt: "Compare these recordings" })
+    });
+    assert.equal(response.status, 503);
+    assert.match((await response.json()).error, /busy or rate-limited/);
+  } finally {
+    setDeepInfraFetchForTests(globalThis.fetch);
+    if (previous === undefined) delete process.env.DEEPINFRA_API_KEY;
+    else process.env.DEEPINFRA_API_KEY = previous;
+  }
+});
+
 test("audio identification reports missing provider configuration", async () => {
   const response = await fetch(`${baseUrl}/api/identify`, {
     method: "POST",
