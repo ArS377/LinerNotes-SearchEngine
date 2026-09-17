@@ -18,7 +18,7 @@ const identity = (item) => `${normalize(item.artist)}::${normalize(item.title)}`
 export async function bookmarkDiscovery(input, dependencies = {}) {
   const options = requestSchema.parse(input);
   const result = buildMusicInsights(options);
-  // Bound provider work and cover different artists before revisiting an artist.
+  // Every saved recording participates; concurrency, not library coverage, is bounded.
   const unique = [...new Map(options.bookmarks.map((item) => [item.slug, item])).values()];
   const artists = new Set();
   const first = [], remaining = [];
@@ -27,7 +27,7 @@ export async function bookmarkDiscovery(input, dependencies = {}) {
     (artists.has(artist) ? remaining : first).push(item);
     artists.add(artist);
   }
-  const seeds = [...first, ...remaining].slice(0, 4);
+  const seeds = [...first, ...remaining];
   const groups = [];
   let incomplete = false;
   // Sequential seed lookups avoid multiplying MusicBrainz's rate-limited queue.
@@ -38,28 +38,49 @@ export async function bookmarkDiscovery(input, dependencies = {}) {
         excludeSlugs: unique.map((item) => item.slug), limit: Math.min(10, options.limit)
       });
       incomplete ||= found.providerStatus === "unavailable";
-      groups.push(found.items.filter((item) => item.evidence?.genres?.length && item.components?.genre > 0));
+      groups.push({ seed, items: found.items.filter((item) => item.evidence?.genres?.length && item.components?.genre > 0) });
     } catch {
       incomplete = true;
-      groups.push([]);
+      groups.push({ seed, items: [] });
     }
   }
   const slugs = new Set(unique.map((item) => item.slug));
   const identities = new Set(unique.map(identity));
-  const artistCounts = new Map(), albums = new Set();
-  // Round-robin keeps one bookmarked style from consuming the whole list.
-  for (let index = 0; index < 10 && result.recommendations.length < options.limit; index++) {
-    for (const group of groups) {
-      const item = group[index];
-      if (!item || result.recommendations.length >= options.limit) continue;
+  const pool = new Map();
+  // Merge evidence BEFORE selection: deduplication must not erase other bookmarks.
+  for (const { seed, items } of groups) {
+    for (const item of items) {
+      const key = identity(item);
+      if (slugs.has(item.slug) || identities.has(key)) continue;
+      if (!pool.has(key)) pool.set(key, { ...item, matchedBookmarks: [] });
+      const entry = pool.get(key);
+      if (!entry.matchedBookmarks.some((match) => match.slug === seed.slug)) {
+        entry.matchedBookmarks.push({ slug: seed.slug, title: seed.title, artist: seed.artist, score: item.score, evidence: item.evidence, reasons: item.reasons });
+      }
+    }
+  }
+  const artistCounts = new Map(), albums = new Set(), coverage = new Map();
+  while (pool.size && result.recommendations.length < options.limit) {
+    let best = null, bestValue = -Infinity;
+    for (const item of pool.values()) {
       const key = identity(item), artist = normalize(item.artist);
       const album = item.album && normalize(item.album) !== "release unknown" ? `${artist}::${normalize(item.album)}` : null;
-      if (slugs.has(item.slug) || identities.has(key) || (artistCounts.get(artist) || 0) >= 2 || (album && albums.has(album))) continue;
-      slugs.add(item.slug); identities.add(key);
-      artistCounts.set(artist, (artistCounts.get(artist) || 0) + 1);
-      if (album) albums.add(album);
-      result.recommendations.push({ ...item, reason: item.reasons.join(" "), recommendationScore: item.score });
+      if ((artistCounts.get(artist) || 0) >= 2 || (album && albums.has(album))) continue;
+      // Diminishing credit for represented seeds gives other saved styles a turn.
+      const value = item.matchedBookmarks.reduce((sum, match) => sum + (1 + match.score) / (1 + (coverage.get(match.slug) || 0)) ** 2, 0);
+      if (value > bestValue || (value === bestValue && key < identity(best))) { best = item; bestValue = value; }
     }
+    if (!best) break;
+    pool.delete(identity(best));
+    const artist = normalize(best.artist);
+    artistCounts.set(artist, (artistCounts.get(artist) || 0) + 1);
+    if (best.album && normalize(best.album) !== "release unknown") albums.add(`${artist}::${normalize(best.album)}`);
+    for (const match of best.matchedBookmarks) coverage.set(match.slug, (coverage.get(match.slug) || 0) + 1);
+    best.matchedBookmarks.sort((a, b) => a.slug.localeCompare(b.slug));
+    const reason = best.matchedBookmarks.length === 1
+      ? best.matchedBookmarks[0].reasons.join(" ")
+      : `Matches your bookmarks: ${best.matchedBookmarks.map((match) => `${match.title} by ${match.artist} (${match.evidence.genres.join(", ")})`).join("; ")}. Uses catalog genre metadata, which may be artist- or album-level, not audio similarity.`;
+    result.recommendations.push({ ...best, reason, recommendationScore: bestValue });
   }
   return { ...result, status: incomplete ? "partial" : result.recommendations.length ? "ok" : "empty", seedsChecked: seeds.length, totalSeeds: unique.length };
 }
