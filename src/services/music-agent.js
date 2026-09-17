@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { askOpenClaw } from "../providers/openclaw.js";
+import { askDeepInfra } from "../providers/deepinfra.js";
 import { federatedSearch } from "../federated-search.js";
 import { getArtistProfile, getRecording } from "../catalog.js";
 
@@ -46,7 +46,7 @@ export async function sendAgentMessage(conversationId, prompt, context = {}) {
   }
   const messages = conversations.get(conversationId);
   const boundedContext = safeContext(context);
-  const response = await askOpenClaw(prompt, {
+  const response = await askDeepInfra(prompt, {
     ...boundedContext,
     conversation: messages.slice(-6)
   });

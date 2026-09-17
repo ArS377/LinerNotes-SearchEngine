@@ -237,8 +237,8 @@ function App() {
   const path = usePath(); const url = useMemo(() => new URL(path, location.origin), [path]);
   const { profile, toggleBookmark, toggleCompare, recordSearch, clearRecentSearches } = useProfile();
   const [current, setCurrent] = useState<RecordingSummary | null>(null);
-  const capabilities = useQuery({ queryKey: ["capabilities"], queryFn: () => api<{ openClawAssistant: boolean }>("/api/capabilities") });
-  const assistantEnabled = capabilities.data?.openClawAssistant === true;
+  const capabilities = useQuery({ queryKey: ["capabilities"], queryFn: () => api<{ musicAssistant: boolean }>("/api/capabilities") });
+  const assistantEnabled = capabilities.data?.musicAssistant === true;
   const parts = url.pathname.split("/").filter(Boolean);
   let content: React.ReactNode = <Home clearRecentSearches={clearRecentSearches} recordSearch={recordSearch} profile={profile} toggleBookmark={toggleBookmark} toggleCompare={toggleCompare} />;
   if (url.pathname === "/search") content = <SearchResults url={url} profile={profile} recordSearch={recordSearch} toggleBookmark={toggleBookmark} toggleCompare={toggleCompare} assistantEnabled={assistantEnabled} />;

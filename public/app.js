@@ -157,7 +157,7 @@ async function loadCapabilities() {
 
 function syncAssistantVisibility() {
   for (const panel of document.querySelectorAll("[data-assistant-panel]")) {
-    panel.hidden = !capabilities?.openClawAssistant;
+    panel.hidden = !capabilities?.musicAssistant;
   }
 }
 
@@ -169,13 +169,13 @@ function renderAssistantPanel(kind) {
   return `
     <section class="assistant-panel" data-assistant-panel data-assistant-kind="${kind}" hidden>
       <div>
-        <p class="eyebrow">OpenClaw assistant</p>
+        <p class="eyebrow">DeepInfra assistant</p>
         <h2>${heading}</h2>
       </div>
       <form class="assistant-form" data-assistant-form>
-        <label class="sr-only">Ask OpenClaw</label>
+        <label class="sr-only">Ask DeepInfra</label>
         <textarea name="prompt" rows="3" placeholder="${placeholder}" required></textarea>
-        <button type="submit">Ask OpenClaw</button>
+        <button type="submit">Ask DeepInfra</button>
       </form>
       <div class="assistant-response" data-assistant-response aria-live="polite"></div>
     </section>
@@ -218,7 +218,7 @@ function assistantContext(panel) {
 }
 
 function renderAssistantAnswer(body) {
-  const answer = escapeHtml(body.answer || "OpenClaw did not return an answer.");
+  const answer = escapeHtml(body.answer || "DeepInfra did not return an answer.");
   const citations = Array.isArray(body.citations) && body.citations.length
     ? `<ul>${body.citations
         .slice(0, 5)
@@ -1108,7 +1108,7 @@ document.addEventListener("submit", async (event) => {
   const prompt = new FormData(form).get("prompt").trim();
   if (!prompt) return;
 
-  responseNode.textContent = "Asking OpenClaw...";
+  responseNode.textContent = "Asking DeepInfra...";
   submit.disabled = true;
   try {
     const response = await fetch("/api/assistant", {
@@ -1122,15 +1122,15 @@ document.addEventListener("submit", async (event) => {
     const body = await response.json();
     if (response.status === 503) {
       responseNode.innerHTML = `
-        <p>OpenClaw is not configured on this server.</p>
+        <p>DeepInfra is not configured on this server.</p>
         <small>Required: ${body.required.map(escapeHtml).join(", ")}</small>
       `;
       return;
     }
-    if (!response.ok) throw new Error(body.error || "OpenClaw request failed");
+    if (!response.ok) throw new Error(body.error || "DeepInfra request failed");
     responseNode.innerHTML = renderAssistantAnswer(body);
   } catch (error) {
-    responseNode.textContent = error.message || "OpenClaw request failed.";
+    responseNode.textContent = error.message || "DeepInfra request failed.";
   } finally {
     submit.disabled = false;
   }

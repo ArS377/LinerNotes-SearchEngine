@@ -5,10 +5,7 @@ import { setMusicBrainzFetchForTests } from "../src/providers/musicbrainz.js";
 import { setAppleFetchForTests } from "../src/providers/apple.js";
 import { setCoverArtFetchForTests } from "../src/providers/cover-art.js";
 import { setWikimediaFetchForTests } from "../src/providers/wikimedia.js";
-import {
-  setOpenClawExecFileForTests,
-  setOpenClawFetchForTests
-} from "../src/providers/openclaw.js";
+import { setDeepInfraFetchForTests } from "../src/providers/deepinfra.js";
 
 let baseUrl;
 
@@ -161,7 +158,7 @@ test("status endpoint reports runtime and provider modes", async () => {
   assert.equal(body.status, "ok");
   assert.equal(body.providers.musicBrainz, "enabled");
   assert.equal(body.providers.appleMusic, "enabled");
-  assert.match(body.providers.openClaw, /configured|not-configured/);
+  assert.match(body.providers.deepInfra, /configured|not-configured/);
   assert.equal(typeof body.uptimeSeconds, "number");
 });
 
@@ -172,123 +169,50 @@ test("capabilities endpoint reports configured product features", async () => {
   assert.equal(body.globalSearch, true);
   assert.equal(body.applePlayback, true);
   assert.equal(typeof body.audioIdentification, "boolean");
-  assert.equal(typeof body.openClawAssistant, "boolean");
+  assert.equal(typeof body.musicAssistant, "boolean");
 });
 
-test("assistant endpoint reports missing OpenClaw configuration", async () => {
-  const previousBaseUrl = process.env.OPENCLAW_BASE_URL;
-  const previousApiKey = process.env.OPENCLAW_API_KEY;
-  delete process.env.OPENCLAW_BASE_URL;
-  delete process.env.OPENCLAW_API_KEY;
+test("assistant endpoint reports missing DeepInfra configuration", async () => {
+  const previous = process.env.DEEPINFRA_API_KEY;
+  delete process.env.DEEPINFRA_API_KEY;
   try {
     const response = await fetch(`${baseUrl}/api/assistant`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prompt: "What should I listen to next?" })
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt: "What album is this from?" })
     });
-    const body = await response.json();
     assert.equal(response.status, 503);
-    assert.ok(body.required.includes("OPENCLAW_BASE_URL"));
+    assert.deepEqual((await response.json()).required, ["DEEPINFRA_API_KEY"]);
   } finally {
-    if (previousBaseUrl === undefined) delete process.env.OPENCLAW_BASE_URL;
-    else process.env.OPENCLAW_BASE_URL = previousBaseUrl;
-    if (previousApiKey === undefined) delete process.env.OPENCLAW_API_KEY;
-    else process.env.OPENCLAW_API_KEY = previousApiKey;
+    if (previous === undefined) delete process.env.DEEPINFRA_API_KEY;
+    else process.env.DEEPINFRA_API_KEY = previous;
   }
 });
 
-test("assistant endpoint proxies read-only music context to OpenClaw", async () => {
-  const previousBaseUrl = process.env.OPENCLAW_BASE_URL;
-  const previousApiKey = process.env.OPENCLAW_API_KEY;
-  process.env.OPENCLAW_BASE_URL = "https://openclaw.example.test/";
-  process.env.OPENCLAW_API_KEY = "test-key";
-
+test("assistant endpoint sends catalog context to DeepInfra", async () => {
+  const previous = process.env.DEEPINFRA_API_KEY;
+  process.env.DEEPINFRA_API_KEY = "test-key";
   try {
-    setOpenClawFetchForTests(async (url, options) => {
-      assert.equal(String(url), "https://openclaw.example.test/api/ask");
-      assert.equal(options.method, "POST");
+    setDeepInfraFetchForTests(async (url, options) => {
+      assert.equal(url, "https://api.deepinfra.com/v1/openai/chat/completions");
       assert.equal(options.headers.authorization, "Bearer test-key");
       const body = JSON.parse(options.body);
-      assert.equal(body.prompt, "Explain this song");
-      assert.equal(body.context.application, "Liner Notes");
-      assert.equal(body.context.mode, "read-only music research assistant");
-      assert.equal(body.context.song.title, "Alright");
-      return {
-        ok: true,
-        json: async () => ({
-          answer: "Start with the album context and compare live versions.",
-          citations: [{ title: "MusicBrainz" }],
-          model: "openclaw-test"
-        })
-      };
+      assert.equal(body.max_tokens, 512);
+      assert.equal(body.messages[0].role, "system");
+      const supplied = JSON.parse(body.messages[1].content);
+      assert.equal(supplied.question, "Explain this song");
+      assert.equal(supplied.catalogContext.song.title, "Alright");
+      return { ok: true, json: async () => ({ choices: [{ message: { content: "It is from To Pimp a Butterfly." } }] }) };
     });
-
     const response = await fetch(`${baseUrl}/api/assistant`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        prompt: "Explain this song",
-        context: { type: "song", song: { title: "Alright" } }
-      })
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt: "Explain this song", context: { song: { title: "Alright", album: "To Pimp a Butterfly" } } })
     });
-    const body = await response.json();
     assert.equal(response.status, 200);
-    assert.match(body.answer, /album context/);
-    assert.equal(body.model, "openclaw-test");
+    assert.match((await response.json()).answer, /To Pimp a Butterfly/);
   } finally {
-    if (previousBaseUrl === undefined) delete process.env.OPENCLAW_BASE_URL;
-    else process.env.OPENCLAW_BASE_URL = previousBaseUrl;
-    if (previousApiKey === undefined) delete process.env.OPENCLAW_API_KEY;
-    else process.env.OPENCLAW_API_KEY = previousApiKey;
-    setOpenClawFetchForTests(globalThis.fetch);
-  }
-});
-
-test("assistant endpoint can call a local OpenClaw CLI transport", async () => {
-  const previousTransport = process.env.OPENCLAW_TRANSPORT;
-  const previousCliPath = process.env.OPENCLAW_CLI_PATH;
-  const previousSessionKey = process.env.OPENCLAW_SESSION_KEY;
-  process.env.OPENCLAW_TRANSPORT = "cli";
-  process.env.OPENCLAW_CLI_PATH = "openclaw-test";
-  process.env.OPENCLAW_SESSION_KEY = "agent:main:test-session";
-
-  try {
-    setOpenClawExecFileForTests(async (file, args) => {
-      assert.equal(file, "openclaw-test");
-      assert.deepEqual(args.slice(0, 3), ["agent", "--session-key", "agent:main:test-session"]);
-      assert.ok(args.includes("--json"));
-      const message = args[args.indexOf("--message") + 1];
-      assert.match(message, /Explain this result/);
-      assert.match(message, /read-only music research assistant/);
-      assert.match(message, /Visible Song/);
-      return {
-        stdout: JSON.stringify({
-          reply: "Visible Song is the strongest match.",
-          modelId: "claude-cli-test"
-        })
-      };
-    });
-
-    const response = await fetch(`${baseUrl}/api/assistant`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        prompt: "Explain this result",
-        context: { type: "search", visibleResults: [{ title: "Visible Song" }] }
-      })
-    });
-    const body = await response.json();
-    assert.equal(response.status, 200);
-    assert.equal(body.answer, "Visible Song is the strongest match.");
-    assert.equal(body.model, "claude-cli-test");
-  } finally {
-    if (previousTransport === undefined) delete process.env.OPENCLAW_TRANSPORT;
-    else process.env.OPENCLAW_TRANSPORT = previousTransport;
-    if (previousCliPath === undefined) delete process.env.OPENCLAW_CLI_PATH;
-    else process.env.OPENCLAW_CLI_PATH = previousCliPath;
-    if (previousSessionKey === undefined) delete process.env.OPENCLAW_SESSION_KEY;
-    else process.env.OPENCLAW_SESSION_KEY = previousSessionKey;
-    setOpenClawExecFileForTests(null);
+    setDeepInfraFetchForTests(globalThis.fetch);
+    if (previous === undefined) delete process.env.DEEPINFRA_API_KEY;
+    else process.env.DEEPINFRA_API_KEY = previous;
   }
 });
 

@@ -33,9 +33,9 @@ import {
   identifyAudio
 } from "./providers/acrcloud.js";
 import {
-  askOpenClaw,
-  openClawConfigured
-} from "./providers/openclaw.js";
+  askDeepInfra,
+  deepInfraConfigured
+} from "./providers/deepinfra.js";
 import { cached, cacheStatus, rateLimit } from "./services/cache.js";
 import {
   addHistory,
@@ -286,7 +286,7 @@ async function handleRequest(request, response) {
         process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET
       ),
       audioIdentification: audioIdentificationConfigured(),
-      openClawAssistant: openClawConfigured(),
+      musicAssistant: deepInfraConfigured(),
       authenticatedLibrary: libraryConfigured()
     });
     return;
@@ -321,8 +321,7 @@ async function handleRequest(request, response) {
   }
 
   if (url.pathname === "/api/assistant" && request.method === "POST") {
-    const clientKey = request.headers.authorization
-      || request.socket.remoteAddress
+    const clientKey = request.socket.remoteAddress
       || "anonymous";
     const allowance = await rateLimit(`assistant:${clientKey}`, {
       limit: 12,
@@ -345,17 +344,17 @@ async function handleRequest(request, response) {
 
     try {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
-      const answer = await askOpenClaw(body.prompt, body.context);
+      const answer = await askDeepInfra(body.prompt, body.context);
       sendJson(response, 200, answer);
     } catch (error) {
       if (error.code === "NOT_CONFIGURED") {
         sendJson(response, 503, {
-          error: "OpenClaw assistant is not configured",
-          required: ["OPENCLAW_BASE_URL", "OPENCLAW_API_KEY"]
+          error: "DeepInfra assistant is not configured",
+          required: ["DEEPINFRA_API_KEY"]
         });
         return;
       }
-      if (error.code === "EMPTY_PROMPT" || error instanceof SyntaxError) {
+      if (error.code === "EMPTY_PROMPT" || error.code === "INVALID_INPUT" || error instanceof SyntaxError) {
         sendJson(response, 400, {
           error: error instanceof SyntaxError
             ? "Assistant request must be valid JSON"
@@ -363,7 +362,7 @@ async function handleRequest(request, response) {
         });
         return;
       }
-      sendJson(response, 502, { error: "OpenClaw assistant unavailable" });
+      sendJson(response, 502, { error: "DeepInfra assistant unavailable" });
     }
     return;
   }
@@ -419,6 +418,11 @@ async function handleRequest(request, response) {
   }
 
   if (url.pathname.startsWith("/api/v1/agent/conversations/") && url.pathname.endsWith("/messages") && request.method === "POST") {
+    const allowance = await rateLimit(`assistant:${request.socket.remoteAddress || "anonymous"}`, { limit: 12, windowSeconds: 60 });
+    if (!allowance.allowed) {
+      sendJson(response, 429, { error: "Assistant rate limit exceeded" });
+      return;
+    }
     const conversationId = decodeURIComponent(
       url.pathname
         .slice("/api/v1/agent/conversations/".length)
@@ -436,7 +440,8 @@ async function handleRequest(request, response) {
         await sendAgentMessage(conversationId, body.prompt, body.context)
       );
     } catch (error) {
-      sendJson(response, error.code === "NOT_FOUND" ? 404 : 502, { error: error.message });
+      const status = error.code === "NOT_FOUND" ? 404 : error.code === "NOT_CONFIGURED" ? 503 : ["EMPTY_PROMPT", "INVALID_INPUT"].includes(error.code) || error instanceof SyntaxError ? 400 : 502;
+      sendJson(response, status, { error: status === 502 ? "DeepInfra assistant unavailable" : error.message });
     }
     return;
   }
@@ -540,7 +545,7 @@ async function handleRequest(request, response) {
         audioIdentification: audioIdentificationConfigured()
           ? "configured"
           : "not-configured",
-        openClaw: openClawConfigured() ? "configured" : "not-configured"
+        deepInfra: deepInfraConfigured() ? "configured" : "not-configured"
       },
       cache: cacheStatus()
     });

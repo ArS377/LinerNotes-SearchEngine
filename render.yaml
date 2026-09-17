@@ -19,7 +19,7 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
-      - key: OPENCLAW_BASE_URL
-        sync: false
-      - key: OPENCLAW_API_KEY
+      - key: DEEPINFRA_MODEL
+        value: google/gemma-3-4b-it
+      - key: DEEPINFRA_API_KEY
         sync: false

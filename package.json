@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "benchmark": "node scripts/benchmark-search.js",
     "test:relevance": "node --test test/relevance.test.js",
-    "check": "npm run typecheck && npm run lint && node --check public/app.js && node --check src/server.js && node --check src/start.js && node --check src/search.js && node --check src/federated-search.js && node --check src/providers/openclaw.js"
+    "check": "npm run typecheck && npm run lint && node --check public/app.js && node --check src/server.js && node --check src/start.js && node --check src/search.js && node --check src/federated-search.js && node --check src/providers/deepinfra.js"
   },
   "engines": {
     "node": ">=22"

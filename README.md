@@ -17,7 +17,7 @@ credits, provenance, and musical context.
 - A React and TypeScript client with resilient request caching and accessible routing.
 - Optional Supabase authentication and private cross-device libraries.
 - Optional Redis response caching, request coalescing, and assistant rate limits.
-- A grounded OpenClaw discovery agent with structured citations and confidence labels.
+- A low-cost DeepInfra music assistant using the supplied catalog context.
 - OpenTelemetry instrumentation, structured logs, and optional Sentry reporting.
 
 ## Architecture
@@ -86,11 +86,27 @@ Copy `.env.example` to `.env` and add credentials as needed.
   score as a stream count. Without credentials, the interface provides a correctly
   encoded Spotify search link.
 - ACRCloud credentials enable audio-file and humming identification.
-- OpenClaw credentials enable a read-only assistant panel that can answer
+- DeepInfra credentials enable a read-only assistant panel that can answer
   questions using the current search or song context.
 - `MUSICBRAINZ_CONTACT` identifies this application in MusicBrainz API requests.
 
 Credentials are used only on the server and are never exposed to browser code.
+
+### Music assistant setup
+
+Add your token to `DEEPINFRA_API_KEY` in `.env`, then restart `npm start`.
+`DEEPINFRA_MODEL` defaults to `google/gemma-3-4b-it`; no OpenClaw installation
+or credentials are used. Never put the token in a `VITE_` variable or commit `.env`.
+The assistant panel is hidden until the key is configured.
+
+As checked September 17, 2026, [DeepInfra pricing](https://deepinfra.com/models/text-generation/4)
+lists this model at $0.05 per million input tokens and $0.10 per million output
+tokens. 1,000 questions at 1,000 input + 300 output tokens each would cost about
+$0.08 (estimate, not a billing guarantee). Each request caps output at 512 tokens,
+question length at 2,000 characters, and context at 16,000 serialized characters.
+Requests time out after 20 seconds, with no automatic paid retries or tools.
+Answers use catalog context but are not independently fact-checked: confidence
+stays `partial`, and the server does not invent structured citations.
 
 ## Tests
 
