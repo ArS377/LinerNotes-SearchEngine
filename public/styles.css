@@ -184,7 +184,8 @@ main { min-height: calc(100vh - 170px); }
 .compare-grid dl { display: grid; grid-template-columns: 80px 1fr; font-size: 14px; }
 .compare-grid dt, .compare-grid dd { padding: 10px 0; margin: 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .compare-grid dt { color: var(--muted); }
-.remove-compare { position: absolute; top: 8px; right: 8px; font-size: 12px; }
+.remove-compare { position: absolute; top: 8px; right: 8px; width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 50%; background: var(--surface); color: var(--muted); }
+.remove-compare:hover { background: var(--soft); color: var(--accent-ink); border-color: var(--accent-ink); }
 .comparison-analysis { border-block: 1px solid var(--line); padding-block: 24px; margin-bottom: 32px; }
 .comparison-analysis-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
 .comparison-analysis-heading h2 { font-size: 28px; margin: 0 0 4px; }
