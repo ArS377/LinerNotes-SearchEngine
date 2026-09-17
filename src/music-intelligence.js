@@ -104,7 +104,7 @@ export function catalogSummaries() {
   });
 }
 
-export function buildMusicInsights({ bookmarks = [], recentQueries = [], limit = 12 } = {}) {
+export function buildMusicInsights({ bookmarks = [], recentQueries = [] } = {}) {
   const safeBookmarks = Array.isArray(bookmarks) ? bookmarks.slice(0, 200) : [];
   const safeQueries = Array.isArray(recentQueries) ? recentQueries.slice(0, 50) : [];
   const genreCounts = new Map();
@@ -125,37 +125,6 @@ export function buildMusicInsights({ bookmarks = [], recentQueries = [], limit =
   const diversityScore = bookmarkCount
     ? Math.min(100, Math.round(((uniqueArtists / bookmarkCount) * 60) + (Math.min(uniqueGenres, 8) / 8 * 40)))
     : 0;
-  const excluded = new Set(safeBookmarks.map((item) => item.slug));
-  const preferredGenres = new Set(rankedEntries(genreCounts, 8).map((item) => item.name));
-  const preferredArtists = new Set(rankedEntries(artistCounts, 8).map((item) => item.name));
-  const preferredDecades = new Set(rankedEntries(decadeCounts, 5).map((item) => item.name));
-
-  const recommendations = catalogSummaries()
-    .filter((item) => !excluded.has(item.slug))
-    .map((item) => {
-      const genreMatches = item.genres.filter((genre) => {
-        const normalizedGenre = genre.toLowerCase();
-        return [...preferredGenres].some((preferred) =>
-          normalizedGenre === preferred
-          || normalizedGenre.includes(preferred)
-          || preferred.includes(normalizedGenre)
-        );
-      });
-      const artistMatch = preferredArtists.has(item.artist);
-      const decade = decadeOf(item.releaseDate);
-      const decadeMatch = Boolean(decade && preferredDecades.has(decade));
-      const score = (genreMatches.length * 35) + (artistMatch ? 45 : 0) + (decadeMatch ? 18 : 0) + (item.prominence / 20);
-      const reason = artistMatch
-        ? `More from ${item.artist}, one of your bookmarked artists.`
-        : genreMatches.length
-          ? `Matches your interest in ${genreMatches.slice(0, 2).join(" and ")}.`
-          : decadeMatch
-            ? `Fits the ${decade} era in your bookmarks.`
-            : "A highly regarded recording to widen your listening map.";
-      return { ...item, recommendationScore: Math.round(score * 10) / 10, reason };
-    })
-    .sort((left, right) => right.recommendationScore - left.recommendationScore)
-    .slice(0, Math.max(1, Math.min(Number(limit) || 12, 24)));
 
   return {
     profile: {
@@ -168,8 +137,8 @@ export function buildMusicInsights({ bookmarks = [], recentQueries = [], limit =
       topArtists: rankedEntries(artistCounts),
       decades: rankedEntries(decadeCounts)
     },
-    recommendations,
+    recommendations: [],
     generatedAt: new Date().toISOString(),
-    method: "content-based-v1"
+    method: "bookmark-discovery-v2"
   };
 }

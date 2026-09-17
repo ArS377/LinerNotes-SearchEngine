@@ -67,7 +67,10 @@ export const recommendationResponseSchema = z.object({
     recommendationScore: z.number()
   })),
   generatedAt: z.string().datetime(),
-  method: z.literal("content-based-v1")
+  method: z.literal("bookmark-discovery-v2"),
+  status: z.enum(["ok", "partial", "empty"]),
+  seedsChecked: z.number().int().nonnegative(),
+  totalSeeds: z.number().int().nonnegative()
 });
 
 export const citationSchema = z.object({

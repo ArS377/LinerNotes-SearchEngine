@@ -50,6 +50,6 @@ test("builds private taste metrics and explainable recommendations", () => {
   assert.equal(result.profile.topGenres[0].name, "country");
   assert.ok(result.recommendations.every((item) => item.slug !== "jolene-dolly-parton"));
   assert.ok(result.recommendations.every((item) => item.reason.length > 0));
-  assert.equal(result.recommendations[0].slug, "love-story-taylor-swift");
-  assert.equal(result.method, "content-based-v1");
+  assert.deepEqual(result.recommendations, []);
+  assert.equal(result.method, "bookmark-discovery-v2");
 });

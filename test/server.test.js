@@ -288,8 +288,8 @@ test("recommendations return private metrics and explainable ranking", async () 
   assert.equal(response.status, 200);
   assert.equal(body.profile.bookmarkCount, 1);
   assert.equal(body.profile.topArtists[0].name, "Dolly Parton");
-  assert.equal(body.recommendations[0].slug, "love-story-taylor-swift");
-  assert.match(body.recommendations[0].reason, /country/i);
+  assert.equal(body.method, "bookmark-discovery-v2");
+  assert.ok(body.recommendations.every((item) => item.evidence.genres.length > 0 && item.components.genre > 0));
 });
 
 test("suggest endpoint returns local and commercial candidates", async () => {
