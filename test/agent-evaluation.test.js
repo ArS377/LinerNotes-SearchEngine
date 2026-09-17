@@ -81,7 +81,7 @@ test("failures and empty responses fail safely without retries or leaking provid
   await assert.rejects(askDeepInfra("Question"), /empty answer/);
 });
 
-test("provider overload is classified without reading private response bodies or retrying", async () => {
+test("provider overload is retried once without reading private response bodies", async () => {
   process.env.DEEPINFRA_API_KEY = "test-key";
   let calls = 0;
   setDeepInfraFetchForTests(async () => {
@@ -89,5 +89,22 @@ test("provider overload is classified without reading private response bodies or
     return { ok: false, status: 429, text: () => assert.fail("must not expose response body") };
   });
   await assert.rejects(askDeepInfra("Question"), { code: "PROVIDER_BUSY" });
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
+});
+
+test("comparison retries once when the model misses a required structured field", async () => {
+  process.env.DEEPINFRA_API_KEY = "test-key";
+  let calls = 0;
+  setDeepInfraFetchForTests(async (_url, options) => {
+    calls++;
+    const body = JSON.parse(options.body);
+    const content = calls === 1
+      ? JSON.stringify({ song0: "First meaning [1].", style0: "Rock [1]", style1: "Pop [1]", production0: "Guitar [1]", production1: "Synth [1]" })
+      : JSON.stringify({ song0: "First meaning [1].", song1: "Second meaning [1].", style0: "Rock [1]", style1: "Pop [1]", production0: "Guitar [1]", production1: "Synth [1]", uncertainty: "" });
+    if (calls === 2) assert.match(body.messages[1].content, /previous output was incomplete/i);
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) };
+  });
+  const result = await askDeepInfra("Compare", { type: "comparison", recordings: [{ title: "First", artist: "A" }, { title: "Second", artist: "B" }] });
+  assert.equal(calls, 2);
+  assert.equal(result.comparison.introductions.length, 2);
 });

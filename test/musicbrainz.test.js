@@ -197,11 +197,11 @@ test("transient overload is retried once through the rate limiter", async () => 
   assert.equal(requests, 2);
 });
 
-test("persistent overload stops after one retry", async () => {
+test("persistent overload stops after bounded recovery attempts", async () => {
   let requests = 0;
   setMusicBrainzFetchForTests(async () => { requests++; return { ok: false, status: 503 }; });
   await assert.rejects(searchMusicBrainz("still overloaded"), /503/);
-  assert.equal(requests, 2);
+  assert.equal(requests, 3);
 });
 
 test("loads the complete provider genre list using the unpaginated text endpoint", async () => {

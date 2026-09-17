@@ -42,6 +42,30 @@ async function withRateLimit(request) {
   return queued;
 }
 
+function isTransient(error) {
+  return error?.status === 429 || error?.status >= 500 ||
+    error?.name === "AbortError" || error?.name === "TimeoutError" ||
+    error?.code === "ECONNRESET" || error?.code === "ETIMEDOUT";
+}
+
+const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+// Retry through the existing rate queue. MusicBrainz intermittently returns
+// retryable 5xx/rate-limit responses, and bypassing the queue would worsen it.
+async function requestWithRecovery(request, attempts = 3) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await withRateLimit(request);
+    } catch (error) {
+      lastError = error;
+      if (!isTransient(error) || attempt === attempts - 1) throw error;
+      await pause(250 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
 async function requestMusicBrainz(path, params) {
   const url = new URL(`${apiRoot}/${path}`);
   for (const [key, value] of Object.entries(params)) {
@@ -71,11 +95,7 @@ async function requestMusicBrainz(path, params) {
       }
       return format === "txt" ? response.text() : response.json();
     };
-  const pending = withRateLimit(fetchResponse)
-    .catch((error) => {
-      if (error.status === 503) return withRateLimit(fetchResponse);
-      throw error;
-    })
+  const pending = requestWithRecovery(fetchResponse)
     .then((body) => {
       writeCache(cacheKey, body);
       return body;
