@@ -1,10 +1,18 @@
-import test, { afterEach } from "node:test";
+import test, { afterEach, beforeEach } from "node:test";
+import { setTavilyFetchForTests } from "../src/providers/tavily.js";
 import assert from "node:assert/strict";
 import { askDeepInfra, DEFAULT_MODEL, deepInfraConfigured, setDeepInfraFetchForTests } from "../src/providers/deepinfra.js";
 
 const previousKey = process.env.DEEPINFRA_API_KEY;
+const previousTavilyKey = process.env.TAVILY_API_KEY;
+beforeEach(() => {
+  process.env.TAVILY_API_KEY = "test-tavily";
+  setTavilyFetchForTests(async () => ({ ok: true, json: async () => ({ results: [{ title: "Source", url: "https://example.com/music", content: "Music evidence" }] }) }));
+});
 const previousModel = process.env.DEEPINFRA_MODEL;
 afterEach(() => {
+  setTavilyFetchForTests(globalThis.fetch);
+  if (previousTavilyKey === undefined) delete process.env.TAVILY_API_KEY; else process.env.TAVILY_API_KEY = previousTavilyKey;
   setDeepInfraFetchForTests(globalThis.fetch);
   for (const [name, value] of [["DEEPINFRA_API_KEY", previousKey], ["DEEPINFRA_MODEL", previousModel]]) {
     if (value === undefined) delete process.env[name]; else process.env[name] = value;

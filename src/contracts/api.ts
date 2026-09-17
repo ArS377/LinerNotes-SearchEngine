@@ -74,6 +74,7 @@ export const recommendationResponseSchema = z.object({
 });
 
 export const citationSchema = z.object({
+  id: z.number().int().positive().optional(),
   title: z.string().min(1),
   url: z.string().url().optional(),
   source: z.string().optional(),
@@ -86,6 +87,7 @@ export const agentMessageSchema = z.object({
 });
 
 export const agentResponseSchema = z.object({
+  researchStatus: z.enum(["ok", "partial", "unavailable", "empty", "not-configured"]).optional(),
   answer: z.string(),
   citations: z.array(citationSchema),
   suggestions: z.array(recordingSummarySchema).default([]),
