@@ -1,6 +1,7 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
 import { askAgent } from "./api.js";
+import { ResearchAnswer } from "./ResearchAnswer.js";
 import type { RecordingSummary } from "../src/contracts/api.js";
 
 export function comparisonContext(items: RecordingSummary[]) {
@@ -14,7 +15,7 @@ export function comparisonContext(items: RecordingSummary[]) {
   })) };
 }
 
-const prompt = "Compare all supplied recordings using their catalog facts. Write three short paragraphs beginning 'In common:', 'Differences:', and 'What we can’t tell:'. Name the tracks when explaining differences. Do not assume they are versions of the same song. Compare only supplied genres, album, version and release date. Do not infer sound, vocals, energy, quality or a winner from metadata. State important missing information. Use plain text, no markdown or invented facts.";
+const prompt = "Compare all supplied recordings using web research. Explain each song's story or lyrical themes once, distinguishing interpretations from confirmed statements. Compare supported musical style and production in the detail rows. Cite web claims. Say when evidence is missing. Do not assume these are versions of the same song, claim to have listened to audio, or choose a winner.";
 
 export function Comparison({ items, enabled }: { items: RecordingSummary[]; enabled: boolean }) {
   // Remount when the selection changes so an old response cannot describe a new pair.
@@ -26,7 +27,7 @@ function ComparisonRequest({ context, enabled }: { context: ReturnType<typeof co
   const comparison = useMutation({ mutationFn: () => askAgent(prompt, context), retry: false });
   const enough = context.recordings.length >= 2;
   return <section className="comparison-analysis" aria-labelledby="comparison-heading">
-    <div className="comparison-analysis-heading"><div><h2 id="comparison-heading">How do they compare?</h2><p>Compare the catalog facts—not an analysis of the audio.</p></div>
+    <div className="comparison-analysis-heading"><div><h2 id="comparison-heading">How do they compare?</h2><p>Explore their music, themes, and background with sources from the web.</p></div>
       <button className="primary-button" disabled={!enabled || !enough || comparison.isPending} onClick={() => comparison.mutate()}>{comparison.isPending ? "Comparing recordings…" : comparison.isError ? "Retry comparison" : comparison.isSuccess ? "Compare again" : "Compare these recordings"}</button>
     </div>
     {!enabled && <p role="status">AI comparison needs a DeepInfra API key on the server. Add it to .env and restart the backend.</p>}
@@ -34,7 +35,7 @@ function ComparisonRequest({ context, enabled }: { context: ReturnType<typeof co
     <div aria-live="polite" aria-busy={comparison.isPending}>
       {comparison.isPending && <p>Comparing the selected recordings…</p>}
       {comparison.error && <p role="alert">Comparison couldn’t load. {comparison.error.message}</p>}
-      {!comparison.isPending && !comparison.error && comparison.data && <div className="comparison-answer"><p>{comparison.data.answer}</p><p className="comparison-disclaimer">AI-generated from the displayed catalog details. Missing information isn’t evidence of a musical difference.</p></div>}
+      {!comparison.isPending && !comparison.error && comparison.data && <div className="comparison-answer"><ResearchAnswer response={comparison.data} /></div>}
     </div>
   </section>;
 }

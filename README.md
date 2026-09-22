@@ -104,9 +104,25 @@ lists this model at $0.05 per million input tokens and $0.10 per million output
 tokens. 1,000 questions at 1,000 input + 300 output tokens each would cost about
 $0.08 (estimate, not a billing guarantee). Each request caps output at 512 tokens,
 question length at 2,000 characters, and context at 16,000 serialized characters.
-Requests time out after 20 seconds, with no automatic paid retries or tools.
-Answers use catalog context but are not independently fact-checked: confidence
-stays `partial`, and the server does not invent structured citations.
+Model requests time out after 20 seconds, with no automatic paid retries.
+
+Add `TAVILY_API_KEY` to `.env` and restart the backend to enable web research
+for both music questions and recording comparisons. Song questions use one
+basic Tavily search; comparisons use one search per recording (up to three).
+Searches have a 10-second timeout, return up to three bounded excerpts each,
+and successful results are cached in server memory for one hour. Identical
+concurrent searches share a request. Search queries include song titles, artist
+names and the question; full catalog records and conversation history are not
+sent to Tavily. Keys stay on the server.
+
+DeepInfra receives those excerpts alongside music details and cites source IDs.
+The server creates citation links only from returned Tavily URLs actually cited
+by the model. These are search excerpts, not full-page research or independent
+fact-checking; confidence stays `partial`. Missing keys, failed searches and
+empty results are explicitly shown in the UI. When no search evidence is available,
+the server skips generation rather than spending model tokens on an unsupported
+answer. Search outages are not cached. Search charges are separate from model
+charges; basic searches consume one Tavily credit each.
 
 ## Tests
 

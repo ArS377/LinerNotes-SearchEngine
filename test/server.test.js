@@ -6,6 +6,8 @@ import { setAppleFetchForTests } from "../src/providers/apple.js";
 import { setCoverArtFetchForTests } from "../src/providers/cover-art.js";
 import { setWikimediaFetchForTests } from "../src/providers/wikimedia.js";
 import { setDeepInfraFetchForTests } from "../src/providers/deepinfra.js";
+import { setTavilyFetchForTests } from "../src/providers/tavily.js";
+const previousTavilyKey = process.env.TAVILY_API_KEY;
 
 let baseUrl;
 
@@ -23,6 +25,8 @@ test("track discovery validates input and resolves canonical songs", async () =>
 });
 
 before(async () => {
+  process.env.TAVILY_API_KEY = "test-tavily";
+  setTavilyFetchForTests(async () => ({ ok: true, json: async () => ({ results: [{ title: "Music source", url: "https://example.com/music", content: "Music context" }] }) }));
   setWikimediaFetchForTests(async (url) => {
     if (String(url).includes("Special:EntityData")) {
       return {
@@ -140,6 +144,8 @@ before(async () => {
 });
 
 after(async () => {
+  setTavilyFetchForTests(globalThis.fetch);
+  if (previousTavilyKey === undefined) delete process.env.TAVILY_API_KEY; else process.env.TAVILY_API_KEY = previousTavilyKey;
   await new Promise((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve()))
   );
@@ -288,8 +294,8 @@ test("recommendations return private metrics and explainable ranking", async () 
   assert.equal(response.status, 200);
   assert.equal(body.profile.bookmarkCount, 1);
   assert.equal(body.profile.topArtists[0].name, "Dolly Parton");
-  assert.equal(body.recommendations[0].slug, "love-story-taylor-swift");
-  assert.match(body.recommendations[0].reason, /country/i);
+  assert.equal(body.method, "bookmark-discovery-v2");
+  assert.ok(body.recommendations.every((item) => item.evidence.genres.length > 0 && item.components.genre > 0));
 });
 
 test("suggest endpoint returns local and commercial candidates", async () => {

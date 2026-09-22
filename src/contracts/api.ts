@@ -67,10 +67,14 @@ export const recommendationResponseSchema = z.object({
     recommendationScore: z.number()
   })),
   generatedAt: z.string().datetime(),
-  method: z.literal("content-based-v1")
+  method: z.literal("bookmark-discovery-v2"),
+  status: z.enum(["ok", "partial", "empty"]),
+  seedsChecked: z.number().int().nonnegative(),
+  totalSeeds: z.number().int().nonnegative()
 });
 
 export const citationSchema = z.object({
+  id: z.number().int().positive().optional(),
   title: z.string().min(1),
   url: z.string().url().optional(),
   source: z.string().optional(),
@@ -83,6 +87,12 @@ export const agentMessageSchema = z.object({
 });
 
 export const agentResponseSchema = z.object({
+  comparison: z.object({
+    introductions: z.array(z.object({ title: z.string(), artist: z.string(), text: z.string() })).min(2).max(3),
+    rows: z.array(z.object({ aspect: z.string(), cells: z.array(z.string()).min(2).max(3) })),
+    uncertainty: z.string()
+  }).optional(),
+  researchStatus: z.enum(["ok", "partial", "unavailable", "empty", "not-configured"]).optional(),
   answer: z.string(),
   citations: z.array(citationSchema),
   suggestions: z.array(recordingSummarySchema).default([]),

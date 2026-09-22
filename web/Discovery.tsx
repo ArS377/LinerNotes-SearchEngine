@@ -7,9 +7,27 @@ import { slugSchema } from "../src/contracts/discovery.js";
 import { readSavedTrails, readTrail, trailPath, trailStorageKey, type Trail } from "./discovery-trails.js";
 
 type Focus = "balanced" | "genre" | "era";
-type Recommendation = RecordingSummary & { reasons: string[]; evidence: { source: string; url: string | null }; score: number; components: { genre: number; era: number } };
+type Recommendation = RecordingSummary & { reasons: string[]; evidence: { source: string; url: string | null; genres?: string[]; seedYear?: number | null; candidateYear?: number | null }; score: number; components: { genre: number; era: number } };
 type DiscoveryResponse = { seed: RecordingSummary; items: Recommendation[]; providerStatus: string; method: string; candidateCount: number; limitations: string[] };
 type Props = { url: URL; bookmarks: RecordingSummary[]; navigate: (path: string) => void; renderRecording: (recording: RecordingSummary) => React.ReactNode };
+
+type RankingEvidence = { genres?: string[]; seedYear?: number | null; candidateYear?: number | null };
+
+export function rankingExplanation(item: { title: string; evidence: RankingEvidence }, seed: { title: string }, focus: Focus) {
+  const sharedGenres = item.evidence.genres || [];
+  const genreSentence = sharedGenres.length
+    ? `It shares ${new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(sharedGenres)} with ${seed.title}.`
+    : "It did not need a matching genre tag because you chose to focus on release era.";
+  const yearSentence = item.evidence.seedYear && item.evidence.candidateYear
+    ? `${item.title} was released ${Math.abs(item.evidence.candidateYear - item.evidence.seedYear) === 0 ? "in the same year as" : `${Math.abs(item.evidence.candidateYear - item.evidence.seedYear)} year${Math.abs(item.evidence.candidateYear - item.evidence.seedYear) === 1 ? "" : "s"} from`} your starting track.`
+    : "Release-year information was not available for both recordings.";
+  const choiceSentence = focus === "genre"
+    ? "You chose to prioritize matching genre tags."
+    : focus === "era"
+      ? "You chose to prioritize songs released around the same time."
+      : "You chose to balance matching genre tags with release era.";
+  return { genreSentence, yearSentence, choiceSentence };
+}
 
 export function Discovery({ url, bookmarks, navigate, renderRecording }: Props) {
   const seedSlug = url.searchParams.get("seed") || "";
@@ -81,7 +99,7 @@ export function Discovery({ url, bookmarks, navigate, renderRecording }: Props) 
     {applied && query.isFetching && <p role="status">Searching the catalogs and checking previews…</p>}
     {applied && query.error && <div className="state-message" role="alert"><strong>Recommendations couldn’t load</strong><p>{query.error.message}</p><button onClick={() => query.refetch()}>Try again</button></div>}
     {data && <><div className="section-heading"><h2>{data.items.length} recordings to try</h2><span className="discovery-count">{data.candidateCount} candidates checked</span></div>{data.providerStatus !== "ok" && <div role="status"><p>{data.providerStatus === "unavailable" ? "Some catalog lookups couldn’t finish. This is a temporary lookup failure, not a lack of similar music." : "This recording has limited genre metadata. Try release era or another starting track."}</p>{data.providerStatus === "unavailable" && <button disabled={query.isFetching} onClick={() => { void query.refetch(); }}>Retry catalog search</button>}</div>}{!data.items.length && data.providerStatus !== "unavailable" && <div className="state-message"><strong>No matches for these choices</strong><p>Try another focus, allow the same artist, or start with a different recording.</p></div>}
-      <div className="discovery-results">{data.items.map((item) => <article className="discovery-result" key={item.slug}>{renderRecording(item)}<div className="recommendation-reasons"><ul>{item.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul><span>{item.evidence.url ? <a href={item.evidence.url} target="_blank" rel="noreferrer">{item.evidence.source} ↗</a> : item.evidence.source}</span><details><summary>How this was ranked</summary><p>Genre overlap: {item.components.genre.toFixed(2)}. Era proximity: {item.components.era.toFixed(2)}. Weighted relevance: {item.score.toFixed(2)}. The final order also reduces repeated artists and albums. These scores are ranking signals, not probabilities that you’ll like a song.</p></details></div><div className="discovery-result-actions"><button disabled={steps.length >= 10} onClick={() => navigate(trailPath({ ...trail, steps: [...steps, { slug: item.slug, title: item.title, artist: item.artist, reason: item.reasons.join(" ") }] }))}>Follow this recording →</button><button disabled={dismissed.length >= 30 || query.isFetching} onClick={() => setDismissed((items) => [...items, item.slug])}>Not this track</button></div></article>)}</div>
+      <div className="discovery-results">{data.items.map((item) => { const explanation = rankingExplanation(item, seed!, applied!.focus); return <article className="discovery-result" key={item.slug}>{renderRecording(item)}<div className="recommendation-reasons"><ul>{item.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul><span>{item.evidence.url ? <a href={item.evidence.url} target="_blank" rel="noreferrer">{item.evidence.source} ↗</a> : item.evidence.source}</span><details><summary>Why this recommendation</summary><p>{explanation.genreSentence} {explanation.yearSentence} {explanation.choiceSentence}</p><p>We also try not to repeat the same artist or album when other qualified picks are available. This uses catalog tags and release dates—not how the music sounds.</p></details></div><div className="discovery-result-actions"><button disabled={steps.length >= 10} onClick={() => navigate(trailPath({ ...trail, steps: [...steps, { slug: item.slug, title: item.title, artist: item.artist, reason: item.reasons.join(" ") }] }))}>Follow this recording →</button><button disabled={dismissed.length >= 30 || query.isFetching} onClick={() => setDismissed((items) => [...items, item.slug])}>Not this track</button></div></article>; })}</div>
       {steps.length >= 10 && <p>You’ve reached ten steps. Save this trail, then open a recording to start another.</p>}
       {dismissed.length > 0 && <button className="text-link" onClick={() => setDismissed([])}>Reset dismissed tracks ({dismissed.length})</button>}
       <section className="discovery-trail"><div className="section-heading"><h2>Your discovery trail</h2><div className="trail-actions"><button onClick={save}>Save trail</button><button onClick={share}>Copy trail link</button></div></div><ol>{steps.map((step, index) => <li key={`${step.slug}-${index}`}><button className="text-link" onClick={() => navigate(trailPath({ ...trail, steps: steps.slice(0, index + 1) }))}>{step.title} — {step.artist}</button>{step.reason && <p>{step.reason}</p>}</li>)}</ol><p className="discovery-note">The link contains this trail and its focus. Recommendations may change as catalogs update. Localhost links only work on this computer until the app is deployed.</p><p role="status">{message}</p>{shareUrl && <label className="trail-share">Trail link<input readOnly value={shareUrl} onFocus={(event) => event.target.select()} /></label>}</section>

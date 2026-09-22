@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { discover } from "./discovery.js";
+import { bookmarkDiscovery } from "./bookmark-discovery.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize as normalizePath } from "node:path";
 import { Readable } from "node:stream";
@@ -52,7 +53,6 @@ import {
 import { createConversation, sendAgentMessage } from "./services/music-agent.js";
 import { logEvent, observeRequest } from "./observability.js";
 import {
-  buildMusicInsights,
   classifySearchIntent,
   resolveSearchIntent
 } from "./music-intelligence.js";
@@ -311,7 +311,7 @@ async function handleRequest(request, response) {
   if (url.pathname === "/api/v1/recommendations" && request.method === "POST") {
     try {
       const body = await readJson(request, 256 * 1024);
-      sendJson(response, 200, buildMusicInsights(body));
+      sendJson(response, 200, await bookmarkDiscovery(body));
     } catch (error) {
       sendJson(response, error.code === "TOO_LARGE" ? 413 : 400, {
         error: error.code === "TOO_LARGE" ? error.message : "Recommendation request must be valid JSON"

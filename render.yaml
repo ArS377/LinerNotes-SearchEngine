@@ -23,3 +23,5 @@ services:
         value: google/gemma-3-4b-it
       - key: DEEPINFRA_API_KEY
         sync: false
+      - key: TAVILY_API_KEY
+        sync: false

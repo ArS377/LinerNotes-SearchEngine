@@ -1,10 +1,18 @@
-import test, { afterEach } from "node:test";
+import test, { afterEach, beforeEach } from "node:test";
+import { setTavilyFetchForTests } from "../src/providers/tavily.js";
 import assert from "node:assert/strict";
 import { askDeepInfra, DEFAULT_MODEL, deepInfraConfigured, setDeepInfraFetchForTests } from "../src/providers/deepinfra.js";
 
 const previousKey = process.env.DEEPINFRA_API_KEY;
+const previousTavilyKey = process.env.TAVILY_API_KEY;
+beforeEach(() => {
+  process.env.TAVILY_API_KEY = "test-tavily";
+  setTavilyFetchForTests(async () => ({ ok: true, json: async () => ({ results: [{ title: "Source", url: "https://example.com/music", content: "Music evidence" }] }) }));
+});
 const previousModel = process.env.DEEPINFRA_MODEL;
 afterEach(() => {
+  setTavilyFetchForTests(globalThis.fetch);
+  if (previousTavilyKey === undefined) delete process.env.TAVILY_API_KEY; else process.env.TAVILY_API_KEY = previousTavilyKey;
   setDeepInfraFetchForTests(globalThis.fetch);
   for (const [name, value] of [["DEEPINFRA_API_KEY", previousKey], ["DEEPINFRA_MODEL", previousModel]]) {
     if (value === undefined) delete process.env[name]; else process.env[name] = value;
@@ -15,6 +23,22 @@ test("DeepInfra is disabled without a key", async () => {
   delete process.env.DEEPINFRA_API_KEY;
   assert.equal(deepInfraConfigured(), false);
   await assert.rejects(askDeepInfra("What album?"), { code: "NOT_CONFIGURED" });
+});
+
+test("comparison requests use JSON and return one validated introduction per recording", async () => {
+  process.env.DEEPINFRA_API_KEY = "test-key";
+  const context = { type: "comparison", recordings: [{ title: "First song", artist: "First artist" }, { title: "Second song", artist: "Second artist" }] };
+  setDeepInfraFetchForTests(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.equal(body.response_format.type, "json_object");
+    assert.doesNotMatch(body.messages[0].content, /Format the response in Markdown/);
+    const content = JSON.stringify({ introductions: [{ recordingIndex: 0, text: "First story [1]." }, { recordingIndex: 1, text: "Second story [1]." }], rows: [{ aspect: "Style", cells: ["Rock [1]", "Pop [1]"] }], uncertainty: "" });
+    return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) };
+  });
+  const result = await askDeepInfra("Compare", context);
+  assert.equal(result.comparison.introductions.length, 2);
+  assert.equal(result.comparison.introductions[1].title, "Second song");
+  assert.equal(result.citations[0].id, 1);
 });
 
 test("cheap default and bounded generation keep untrusted context separate from instructions", async () => {
